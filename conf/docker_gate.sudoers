@@ -13,3 +13,9 @@ __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain remove *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert install *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert status *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost diagnosis run *
+# Logo Docker Gate posé sur chaque instance "redirect" exposée (chantier 1,
+# 16/07/2026) — même fichier source fixe à chaque fois, seul le nom de
+# l'instance de destination varie (calculé par notre propre code, jamais
+# saisi par l'utilisateur final).
+__APP__ ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /opt/yunohost/__APP__/sources/static/docker-gate-app-logo.png /usr/share/yunohost/applogos/*.png
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost user permission update *

@@ -34,6 +34,11 @@ DATA_FILE = Path(__file__).parent / "data" / "apps.json"
 PORT_RANGE_START = 9100
 PORT_RANGE_END = 9999
 
+# Logo appliqué sur chaque conteneur exposé via "redirect" (chantier 1,
+# 16/07/2026) — mêmes 2 mécanismes YunoHost que pour Docker Gate lui-même
+# (voir scripts/install), appliqués ici sur l'instance "redirect" créée.
+CHILD_LOGO_SOURCE = Path(__file__).parent / "static" / "docker-gate-app-logo.png"
+
 docker_client = docker.from_env()
 
 
@@ -735,6 +740,30 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     )["apps"]}
     new_app_ids = apps_after - apps_before
     yunohost_app_id = next(iter(new_app_ids), None)
+
+    # --- Logo Docker Gate sur l'instance "redirect" exposée (best-effort :
+    # une icône manquante ne doit jamais faire échouer une création qui a
+    # par ailleurs réussi) ---
+    if yunohost_app_id:
+        try:
+            _run_sudo(
+                ["install", "-o", "root", "-g", "root", "-m", "0644",
+                 str(CHILD_LOGO_SOURCE), f"/usr/share/yunohost/applogos/{yunohost_app_id}.png"],
+                t("err_apply_child_logo_admin", lang),
+                lang,
+            )
+        except DockerConnectorError as e:
+            warnings.append(t("warn_child_logo_admin_failed", lang, error=e))
+
+        try:
+            _run_sudo(
+                ["yunohost", "user", "permission", "update", f"{yunohost_app_id}.main",
+                 "--logo", str(CHILD_LOGO_SOURCE)],
+                t("err_apply_child_logo_portal", lang),
+                lang,
+            )
+        except DockerConnectorError as e:
+            warnings.append(t("warn_child_logo_portal_failed", lang, error=e))
 
     entry = {
         "slug": slug,

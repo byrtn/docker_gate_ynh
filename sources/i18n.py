@@ -206,6 +206,22 @@ STRINGS = {
         "en": "Exposing via the YunoHost 'redirect' app failed. The Docker container was started but isn't exposed yet.",
         "fr": "L'exposition via l'app YunoHost 'redirect' a échoué. Le conteneur Docker a été lancé mais n'est pas encore exposé.",
     },
+    "err_apply_child_logo_admin": {
+        "en": "Unable to apply the Docker Gate icon in the admin panel.",
+        "fr": "Impossible d'appliquer l'icône Docker Gate dans le panneau d'administration.",
+    },
+    "err_apply_child_logo_portal": {
+        "en": "Unable to apply the Docker Gate icon on the user portal tile.",
+        "fr": "Impossible d'appliquer l'icône Docker Gate sur la tuile du portail utilisateur.",
+    },
+    "warn_child_logo_admin_failed": {
+        "en": "The app was exposed successfully, but the Docker Gate icon could not be applied in the admin panel: {error}",
+        "fr": "L'app a bien été exposée, mais l'icône Docker Gate n'a pas pu être appliquée dans le panneau d'administration : {error}",
+    },
+    "warn_child_logo_portal_failed": {
+        "en": "The app was exposed successfully, but the Docker Gate icon could not be applied on the user portal tile: {error}",
+        "fr": "L'app a bien été exposée, mais l'icône Docker Gate n'a pas pu être appliquée sur la tuile du portail utilisateur : {error}",
+    },
     "err_unknown_app": {
         "en": "No app named '{slug}' is known.",
         "fr": "Aucune app nommée '{slug}' n'est connue.",
