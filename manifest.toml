@@ -1,0 +1,73 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/master/schemas/manifest.v2.schema.json
+
+packaging_format = 2
+
+id = "docker_gate"
+name = "Docker Gate"
+description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
+description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
+
+version = "0.1~ynh1"
+
+maintainers = ["byrtn"]
+
+[upstream]
+license = "AGPL-3.0-or-later"
+code = "https://github.com/byrtn/docker_gate_ynh"
+
+[integration]
+yunohost = ">= 12.0.0"
+helpers_version = "2.0"
+architectures = ["amd64", "arm64"]
+multi_instance = false
+
+ldap = "not_relevant"
+sso = false
+
+disk = "200M"
+ram.build = "100M"
+ram.runtime = "150M"
+
+[install]
+    [install.domain]
+    # question générique — le texte est géré par le cœur de YunoHost, non personnalisable
+    type = "domain"
+
+    [install.path]
+    # question générique — le texte est géré par le cœur de YunoHost, non personnalisable
+    type = "path"
+    default = "/docker-gate"
+
+    [install.init_main_permission]
+    # question générique elle aussi (confirmé : le texte affiché était le texte
+    # standard YunoHost, pas le nôtre) — seul le texte d'aide est personnalisable
+    type = "group"
+    default = "admins"
+    help.en = "Docker Gate is an administration tool — access should stay restricted to admins."
+    help.fr = "Docker Gate est un outil d'administration — l'accès doit rester restreint aux admins."
+
+    [install.default_language]
+    # Langue par défaut de l'interface (15/07/2026, i18n) — reste modifiable
+    # à tout moment depuis l'interface elle-même (sélecteur EN/FR en haut de
+    # chaque page), ce réglage ne sert qu'à choisir le point de départ.
+    type = "select"
+    choices = ["en", "fr"]
+    default = "en"
+    ask.en = "Default interface language (changeable anytime from the app itself)"
+    ask.fr = "Langue par défaut de l'interface (modifiable à tout moment depuis l'app elle-même)"
+
+[resources]
+    [resources.apt]
+    packages = "python3-venv, python3-pip"
+
+    [resources.system_user]
+
+    [resources.install_dir]
+    dir = "/opt/yunohost/__APP__"
+
+    [resources.permissions]
+    main.url = "/"
+    main.show_tile = true
+
+    [resources.ports]
+    main.default = 9200

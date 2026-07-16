@@ -1,0 +1,42 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# GARDE-FOU : refuser la suppression si des apps enfants existent encore
+#=================================================
+# Étape 2 (11/07/2026) : Docker Gate peut créer des apps Docker
+# exposées via l'app "redirect". Les supprimer silencieusement en même
+# temps que Docker Gate serait dangereux (perte de service surprise).
+# On préfère bloquer et demander à l'utilisateur de les retirer une par une
+# depuis l'interface avant de continuer.
+data_file="$install_dir/data/apps.json"
+if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')" -gt 0 ]; then
+    ynh_print_warn --message="Des apps Docker créées via Docker Gate existent encore ($data_file). Supprime-les d'abord depuis l'interface (bouton 'Supprimer' de chaque app) avant de désinstaller Docker Gate, sinon leurs conteneurs Docker resteront orphelins et leur exposition YunoHost restera en place."
+    ynh_die --message="Suppression annulée par sécurité : des apps enfants existent encore. Voir le message ci-dessus."
+fi
+
+ynh_script_progression --message="Arrêt et suppression du service..." --weight=10
+
+if yunohost service status "$app" >/dev/null 2>&1; then
+    yunohost service remove "$app"
+fi
+
+systemctl stop "$app" 2>/dev/null || true
+systemctl disable "$app" 2>/dev/null || true
+
+ynh_script_progression --message="Suppression de la configuration nginx..." --weight=5
+ynh_remove_nginx_config
+
+ynh_script_progression --message="Suppression des droits sudo..." --weight=5
+rm -f /etc/sudoers.d/docker_gate
+
+ynh_script_progression --message="Suppression de la configuration systemd..." --weight=5
+ynh_remove_systemd_config
+
+# NB : install_dir, la permission SSO et l'utilisateur système de l'app
+# sont automatiquement déprovisionnés par le core YunoHost après ce script
+# (ressources déclarées dans manifest.toml) — pas besoin de le faire ici.
+
+ynh_script_progression --message="Suppression terminée." --last

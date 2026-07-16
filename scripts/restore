@@ -1,0 +1,38 @@
+#!/bin/bash
+
+source "$(dirname "$0")/_common.sh"
+source /usr/share/yunohost/helpers
+
+ynh_script_progression --message="Restauration des fichiers de l'application..." --weight=10
+ynh_restore
+
+ynh_script_progression --message="Vérification de Docker..." --weight=10
+ynh_docker_gate__ensure_docker_installed
+usermod -aG docker "$app"
+
+ynh_script_progression --message="Reconstruction de l'environnement Python..." --weight=15
+python3 -m venv "$venv_dir"
+"$venv_dir/bin/pip" install --upgrade pip
+"$venv_dir/bin/pip" install -r "$install_dir/requirements.txt"
+
+chown -R "$app:$app" "$install_dir"
+chmod 750 "$install_dir"
+
+ynh_script_progression --message="Restauration des droits sudo ciblés..." --weight=5
+cp ../conf/docker_gate.sudoers /etc/sudoers.d/docker_gate
+sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
+chmod 440 /etc/sudoers.d/docker_gate
+chown root:root /etc/sudoers.d/docker_gate
+visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers généré est invalide, restauration interrompue par sécurité."
+
+ynh_script_progression --message="Restauration du logo..." --weight=2
+mkdir -p /usr/share/yunohost/applogos
+install -o root -g root -m 0644 ../logo.png "/usr/share/yunohost/applogos/$app.png"
+yunohost user permission update "$app.main" --logo ../logo.png
+
+ynh_script_progression --message="Réenregistrement du service..." --weight=5
+yunohost service add "$app" --description="Docker Gate for YunoHost" --log="/var/log/$app/$app.log"
+systemctl enable "$app"
+systemctl start "$app"
+
+ynh_script_progression --message="Restauration terminée." --last

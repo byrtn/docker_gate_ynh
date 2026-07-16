@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ t('title_index') }}{% endblock %}
+{% block content %}
+
+{% if apps %}
+  <h1>{{ t('apps_installed_count', count=apps|length, plural=('s' if apps|length > 1 else '')) }}</h1>
+  {% for app in apps %}
+    <div class="card">
+      <div class="info">
+        <strong>{{ app.slug }}</strong>
+        <span>{{ app.image }} — {{ app.domain }}{{ app.path }} — {{ t('public_label') if app.public else t('private_label') }}{{ t('persistent_data_suffix') if app.volume_name else '' }}</span>
+      </div>
+      <div>
+        <a class="link" href="https://{{ app.domain }}{{ app.path }}" target="_blank">{{ t('open_link') }}</a>
+        &nbsp;&nbsp;
+        <form class="inline" method="post" action="{{ url_for('remove', slug=app.slug) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if app.volume_name %}
+          <label style="font-weight:normal; font-size:0.85rem; margin-right:0.5rem;">
+            <input type="checkbox" name="delete_data"> {{ t('checkbox_delete_data') }}
+          </label>
+          {% endif %}
+          {% if app.mode == 'subdomain' %}
+          <label style="font-weight:normal; font-size:0.85rem; margin-right:0.5rem;">
+            <input type="checkbox" name="delete_domain"> {{ t('checkbox_delete_domain', domain=app.domain) }}
+          </label>
+          {% endif %}
+          <button class="btn btn-danger" type="submit"
+                  onclick='return armDelete(this, {{ (t("confirm_delete_with_extras", slug=app.slug) if (app.volume_name or app.mode == "subdomain") else t("confirm_delete_simple", slug=app.slug))|tojson }})'>{{ t('btn_delete') }}</button>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <h1>{{ t('no_app_installed') }}</h1>
+  <p class="lead">{{ t('click_to_add') }}</p>
+{% endif %}
+
+<div class="center">
+  <a class="btn" href="{{ url_for('add') }}">{{ t('btn_add_app') }}</a>
+  &nbsp;&nbsp;
+  <a class="btn" href="{{ url_for('audit') }}">{{ t('btn_audit') }}</a>
+</div>
+
+{% endblock %}

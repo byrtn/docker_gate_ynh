@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang() }}">
+<head>
+<meta charset="UTF-8">
+<title>{% block title %}Docker Gate{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    /* Palette BYRTN/Wappos (charte graphique wappify.byrtn.fr) — thème
+       clair type "System", 15/07/2026, remplace l'ancien thème sombre. */
+    --color-bg: #fafafa;
+    --color-bg-pure: #ffffff;
+    --color-primary: #1e3a5f;
+    --color-primary-2: #0d4f8b;
+    --color-accent: #e07b3a;
+    --color-text: #1a1a1a;
+    --color-text-dim: #555555;
+    --color-border: rgba(30, 58, 95, 0.15);
+    --color-danger: #d9534f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Montserrat', -apple-system, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 3rem 1.5rem 5rem;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; position: relative; }
+  .eyebrow {
+    color: var(--color-accent);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1rem; text-align: center; color: var(--color-primary); }
+  p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2rem; }
+  .btn {
+    display: inline-block;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-bg-pure);
+    text-decoration: none;
+    padding: 0.7rem 1.8rem;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .btn:hover { background: var(--color-primary); color: var(--color-bg-pure); }
+  .btn-danger { border-color: var(--color-danger); color: var(--color-danger); }
+  .btn-danger:hover { background: var(--color-danger); color: #fff; }
+  .btn-danger.btn-armed { background: var(--color-danger); color: #fff; }
+  .center { text-align: center; margin: 2rem 0; }
+  .card {
+    background: var(--color-bg-pure);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .card .info strong { font-size: 1.05rem; }
+  .card .info span { display: block; color: var(--color-text-dim); font-size: 0.85rem; margin-top: 0.2rem; }
+  .card a.link { color: var(--color-accent); }
+  form.inline { display: inline; }
+  .flash { padding: 0.8rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .flash-success { background: rgba(80, 200, 120, 0.12); border: 1px solid rgba(80, 200, 120, 0.5); }
+  .flash-error { background: rgba(217, 83, 79, 0.1); border: 1px solid rgba(217, 83, 79, 0.5); }
+  .flash-warning { background: rgba(224, 123, 58, 0.1); border: 1px solid rgba(224, 123, 58, 0.5); }
+  .summary-list { list-style: none; padding: 0; margin: 0; }
+  .summary-list li { padding: 0.4rem 0; font-size: 0.9rem; }
+  .field { margin-bottom: 1.3rem; }
+  .field label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; color: var(--color-text); font-weight: 500; }
+  .field select option {
+    color: var(--color-text);
+    background: var(--color-bg-pure);
+  }
+  .field input[type=text], .field input[type=number], .field select, .field textarea {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-pure);
+    color: var(--color-text);
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .field textarea.monospace { font-family: 'Courier New', monospace; font-size: 0.85rem; }
+  .text-input {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-pure);
+    color: var(--color-text);
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .text-input.monospace { font-family: 'Courier New', monospace; font-size: 0.85rem; }
+  .field small { display: block; color: var(--color-text-dim); font-size: 0.8rem; margin-top: 0.3rem; }
+  .mode-block { border: 1px solid var(--color-border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background: var(--color-bg-pure); }
+  .footer { text-align: center; margin-top: 3rem; font-size: 0.85rem; color: var(--color-text-dim); }
+  .footer b { color: var(--color-accent); }
+  a { color: var(--color-primary-2); }
+  .lang-switcher { position: absolute; top: 1rem; right: 1.5rem; font-size: 0.8rem; }
+  .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
+  .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="lang-switcher">
+    <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
+    <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
+  </div>
+  <div class="eyebrow">Docker Gate — Wappos v2</div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      {% set css_category = category if category in ('success', 'warning') else 'error' %}
+      <div class="flash flash-{{ css_category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+  <div class="footer">Un produit <b>BYRTN</b> — souveraineté numérique.</div>
+</div>
+<script>
+const CONFIRM_LABEL = {{ t('btn_confirm')|tojson }};
+
+// Armement à deux clics pour les boutons de suppression (remplace confirm(),
+// bloquant et non automatisable). Premier clic : affiche le message et arme
+// le bouton pendant quelques secondes. Second clic dans ce délai : soumet
+// réellement le formulaire.
+function armDelete(btn, message) {
+  if (btn.dataset.armed === '1') {
+    return true;
+  }
+  btn.dataset.armed = '1';
+  btn.dataset.originalText = btn.textContent;
+  btn.textContent = CONFIRM_LABEL;
+  btn.title = message;
+  btn.classList.add('btn-armed');
+  clearTimeout(btn._armTimer);
+  btn._armTimer = setTimeout(function () {
+    btn.textContent = btn.dataset.originalText;
+    btn.dataset.armed = '0';
+    btn.classList.remove('btn-armed');
+    btn.removeAttribute('title');
+  }, 4000);
+  return false;
+}
+</script>
+</body>
+</html>

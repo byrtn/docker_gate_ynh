@@ -1,0 +1,15 @@
+# Droits ciblés pour Docker Gate — ne PAS élargir sans raison précise.
+# Docker lui-même ne nécessite aucun droit ici : l'utilisateur système de l'app
+# est déjà membre du groupe "docker" (ajouté par le script d'installation).
+# Seules les commandes yunohost touchant apps/domaines/nginx/SSO nécessitent root.
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app install redirect *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app remove *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app list*
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app info *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain list*
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain info *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain add *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain remove *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert install *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert status *
+__APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost diagnosis run *

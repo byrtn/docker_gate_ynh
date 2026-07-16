@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+{% block title %}{{ t('title_add') }}{% endblock %}
+{% block content %}
+
+<h1>{{ t('h1_add') }}</h1>
+
+{% if error %}
+  <div class="flash flash-error">{{ error }}</div>
+{% endif %}
+
+<div class="mode-block" style="margin-bottom:1.5rem;">
+  <label for="raw_input">{{ t('raw_input_label') }}</label>
+  <textarea id="raw_input" rows="5" class="text-input monospace" style="margin-top:0.5rem;" placeholder="{{ t('raw_input_placeholder') }}"></textarea>
+
+  <details style="margin-top:0.6rem;">
+    <summary style="cursor:pointer; font-size:0.85rem; color:var(--color-text-dim);">{{ t('import_file_or_url') }}</summary>
+    <div style="margin:0.6rem 0;">
+      <!-- Le <input type="file"> natif affiche un libellé de bouton fourni
+           par le NAVIGATEUR lui-même selon sa langue système ("Choisir un
+           fichier"/"Choose file"), impossible à traduire depuis la page
+           (constaté le 15/07/2026, testé en direct par Patrick). Masqué et
+           remplacé par notre propre bouton, déclenché en JS. -->
+      <input type="file" id="compose_file" accept=".yml,.yaml,.txt" onchange="loadComposeFile(event)" style="display:none;">
+      <button type="button" class="btn" onclick="document.getElementById('compose_file').click()">{{ t('btn_choose_file') }}</button>
+      <span id="compose_file_name" style="margin-left:0.5rem; color:var(--color-text-dim); font-size:0.85rem;">{{ t('no_file_chosen') }}</span>
+    </div>
+    <div style="margin:0.6rem 0;">
+      <input type="text" id="compose_url" class="text-input" placeholder="{{ t('compose_url_placeholder') }}">
+    </div>
+  </details>
+
+  <div style="margin-top:0.8rem;">
+    <button type="button" class="btn" onclick="analyze()">{{ t('btn_analyze') }}</button>
+  </div>
+  <div id="analyze-result" style="margin-top:0.8rem; font-size:0.95rem; font-weight:600; text-align:left;"></div>
+</div>
+
+<form method="post" action="{{ url_for('add') }}" id="main-form" onsubmit="return beforeSubmit();">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="field">
+    <label for="slug">{{ t('app_name_label') }}</label>
+    <input type="text" id="slug" name="slug" required pattern="[a-z0-9][a-z0-9-]{1,30}"
+           value="{{ form.slug if form else '' }}" placeholder="{{ t('app_name_placeholder') }}" oninput="onSlugInput()">
+    <small>{{ t('app_name_help') }}</small>
+  </div>
+
+  <div class="field">
+    <label>{{ t('where_install_label') }}</label>
+    <label style="font-weight:normal; display:inline-block; margin-right:1.5rem;">
+      <input type="radio" name="mode_simple" value="path" checked onclick="toggleMode('path')">
+      {{ t('mode_path_label') }}
+    </label>
+    <label style="font-weight:normal; display:inline-block;">
+      <input type="radio" name="mode_simple" value="subdomain" onclick="toggleMode('subdomain')">
+      {{ t('mode_subdomain_label') }}
+    </label>
+    <small>{{ t('mode_help') }}</small>
+  </div>
+
+  <input type="hidden" name="mode" id="mode" value="path">
+
+  <div class="field" id="address-path">
+    <label for="domain">{{ t('address_label') }}</label>
+    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+      <select id="domain" name="domain" style="width:auto; flex:0 0 auto;" onchange="schedulePathCheck()">
+        {% for d in domains %}
+          <option value="{{ d }}">{{ d }}</option>
+        {% endfor %}
+      </select>
+      <span>/</span>
+      <input type="text" id="path_visible" placeholder="{{ t('app_name_placeholder') }}"
+             style="flex:1; min-width:150px;" oninput="onPathInput()">
+      <input type="hidden" id="path" name="path" value="{{ form.path if form else '' }}">
+    </div>
+    <small>{{ t('address_help') }}</small>
+    <div id="path-status" style="margin-top:0.8rem;"></div>
+  </div>
+
+  <div class="field" id="address-subdomain" style="display:none;">
+    <label for="new_subdomain">{{ t('address_label') }}</label>
+    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+      <input type="text" id="new_subdomain" name="new_subdomain" placeholder="ex: kuma"
+             style="flex:1; min-width:150px;"
+             value="{{ form.new_subdomain if form else '' }}" oninput="onSubdomainInput()">
+      <span>.</span>
+      <select id="domain_parent" name="domain_parent" onchange="scheduleSubdomainCheck()" style="width:auto; flex:0 0 auto;">
+        {% for d in domains %}
+          <option value="{{ d }}">{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <small>{{ t('address_help') }}</small>
+    <div style="margin-top:0.6rem; padding:0.6rem 0.8rem; background:rgba(224,123,58,0.12); border-left:3px solid #e07b3a; border-radius:4px; font-size:0.85rem;">
+      {{ t('dns_reminder') }}
+    </div>
+    <div id="subdomain-status" style="margin-top:0.8rem;"></div>
+    <input type="hidden" name="reuse_existing_domain" id="reuse_existing_domain" value="">
+  </div>
+
+  <div class="field">
+    <label style="font-weight:normal;">
+      <input type="checkbox" name="public" {{ 'checked' if form and form.public else '' }}>
+      {{ t('checkbox_public') }}
+    </label>
+  </div>
+
+  <details id="advanced-details">
+    <summary style="cursor:pointer; margin-bottom:1rem;">{{ t('advanced_config') }}</summary>
+
+    <div class="field">
+      <label for="image">{{ t('image_label') }}</label>
+      <input type="text" id="image" name="image" required
+             value="{{ form.image if form else '' }}" placeholder="ex: louislam/uptime-kuma:1">
+    </div>
+
+    <div class="field">
+      <label for="container_port">{{ t('port_label') }}</label>
+      <input type="number" id="container_port" name="container_port" required
+             value="{{ form.container_port if form else '' }}" placeholder="ex: 3001">
+    </div>
+
+    <div class="field">
+      <label for="data_path">{{ t('data_path_label') }}</label>
+      <input type="text" id="data_path" name="data_path"
+             value="{{ form.data_path if form else '' }}" placeholder="ex: /app/data">
+      <small>{{ t('data_path_help') }}</small>
+    </div>
+
+    <div class="field">
+      <label for="url_env_var">{{ t('url_env_var_label') }}</label>
+      <input type="text" id="url_env_var" name="url_env_var"
+             value="{{ form.url_env_var if form else '' }}" placeholder="ex: DOMAIN, ROOT_URL...">
+      <small>{{ t('url_env_var_help') }}</small>
+    </div>
+
+    <div class="field">
+      <label for="env_vars">{{ t('other_env_vars_label') }}</label>
+      <textarea id="env_vars" name="env_vars" rows="3" class="monospace" placeholder="ADMIN_TOKEN=...&#10;TZ=Europe/Paris">{{ form.env_vars if form else '' }}</textarea>
+      <small>{{ t('other_env_vars_help') }}</small>
+    </div>
+  </details>
+
+  <div class="center" style="margin-top:1.5rem;">
+    <button class="btn" type="submit">{{ t('btn_install') }}</button>
+  </div>
+</form>
+
+<script>
+let subdomainBlocked = false;
+let subdomainCheckTimer = null;
+let pathManuallyEdited = false;
+let subdomainManuallyEdited = false;
+let pathBlocked = false;
+let pathCheckTimer = null;
+
+const MSG = {
+  pasteFirst: {{ t('js_paste_something')|tojson }},
+  analyzing: {{ t('js_analyzing')|tojson }},
+  reviewPrefilled: {{ t('js_review_prefilled')|tojson }},
+  nothingExtracted: {{ t('js_nothing_extracted')|tojson }},
+  commError: {{ t('js_comm_error')|tojson }},
+  alertSubdomainBlocked: {{ t('js_alert_subdomain_blocked')|tojson }},
+  alertPathBlocked: {{ t('js_alert_path_blocked')|tojson }},
+};
+
+function toggleMode(mode) {
+  document.getElementById('mode').value = mode;
+  document.getElementById('address-path').style.display = (mode === 'path') ? 'block' : 'none';
+  document.getElementById('address-subdomain').style.display = (mode === 'subdomain') ? 'block' : 'none';
+  if (mode === 'subdomain') { scheduleSubdomainCheck(); }
+}
+
+function onSlugInput() {
+  const slug = document.getElementById('slug').value.trim();
+  if (!pathManuallyEdited) {
+    document.getElementById('path_visible').value = slug;
+    document.getElementById('path').value = '/' + slug;
+    schedulePathCheck();
+  }
+  if (!subdomainManuallyEdited) {
+    document.getElementById('new_subdomain').value = slug;
+    scheduleSubdomainCheck();
+  }
+}
+
+function onPathInput() {
+  pathManuallyEdited = true;
+  const v = document.getElementById('path_visible').value.trim();
+  document.getElementById('path').value = '/' + v;
+  schedulePathCheck();
+}
+
+function schedulePathCheck() {
+  clearTimeout(pathCheckTimer);
+  pathCheckTimer = setTimeout(checkPath, 500);
+}
+
+function checkPath() {
+  const domain = document.getElementById('domain').value;
+  const path = document.getElementById('path').value;
+  const statusEl = document.getElementById('path-status');
+  pathBlocked = false;
+  if (!path || path === '/') { statusEl.innerHTML = ''; return; }
+
+  fetch('{{ url_for("check_path") }}?domain=' + encodeURIComponent(domain) + '&path=' + encodeURIComponent(path))
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'free') {
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(94,200,122,0.15); border-left:3px solid #5ec87a; border-radius:4px;">'
+          + MSG.pathAvailable(data.domain + data.path) + '</div>';
+      } else if (data.status === 'used') {
+        pathBlocked = true;
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(217,83,79,0.15); border-left:3px solid #d9534f; border-radius:4px;">'
+          + MSG.pathUsed(data.domain + data.path, data.app_name) + '</div>';
+      } else {
+        statusEl.innerHTML = '';
+      }
+    })
+    .catch(() => { statusEl.innerHTML = ''; });
+}
+
+function onSubdomainInput() {
+  subdomainManuallyEdited = true;
+  scheduleSubdomainCheck();
+}
+
+function scheduleSubdomainCheck() {
+  clearTimeout(subdomainCheckTimer);
+  subdomainCheckTimer = setTimeout(checkSubdomain, 500);
+}
+
+function checkSubdomain() {
+  const newSubdomain = document.getElementById('new_subdomain').value.trim();
+  const domainParent = document.getElementById('domain_parent').value;
+  const statusEl = document.getElementById('subdomain-status');
+  document.getElementById('reuse_existing_domain').value = '';
+  subdomainBlocked = false;
+  if (!newSubdomain) { statusEl.innerHTML = ''; return; }
+
+  fetch('{{ url_for("check_subdomain") }}?new_subdomain=' + encodeURIComponent(newSubdomain) + '&domain_parent=' + encodeURIComponent(domainParent))
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'free') {
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(94,200,122,0.15); border-left:3px solid #5ec87a; border-radius:4px;">'
+          + MSG.subdomainAvailable(data.domain) + '</div>';
+      } else if (data.status === 'exists_empty') {
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(224,123,58,0.15); border-left:3px solid #e07b3a; border-radius:4px;">'
+          + MSG.subdomainExistsEmpty(data.domain) + '<br>'
+          + '<label style="font-weight:normal; display:inline-block; margin-top:0.4rem;">'
+          + '<input type="checkbox" onchange="document.getElementById(\'reuse_existing_domain\').value = this.checked ? \'on\' : \'\'"> '
+          + MSG.reuseSubdomain + '</label></div>';
+      } else if (data.status === 'exists_used') {
+        subdomainBlocked = true;
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(217,83,79,0.15); border-left:3px solid #d9534f; border-radius:4px;">'
+          + MSG.subdomainUsed(data.domain, data.suggestion) + '</div>';
+      }
+    })
+    .catch(() => { statusEl.innerHTML = ''; });
+}
+
+function beforeSubmit() {
+  const mode = document.getElementById('mode').value;
+  if (mode === 'subdomain' && subdomainBlocked) {
+    alert(MSG.alertSubdomainBlocked);
+    return false;
+  }
+  if (mode === 'path' && pathBlocked) {
+    alert(MSG.alertPathBlocked);
+    return false;
+  }
+  return true;
+}
+
+function suggestSlug(image) {
+  if (!image) return '';
+  const withoutTag = image.split(':')[0];
+  const parts = withoutTag.split('/');
+  return parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9-]/g, '-');
+}
+
+function loadComposeFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('compose_file_name').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('raw_input').value = e.target.result;
+    document.getElementById('compose_url').value = '';
+    analyze();
+  };
+  reader.readAsText(file);
+}
+
+function analyze() {
+  const url = document.getElementById('compose_url').value.trim();
+  const text = document.getElementById('raw_input').value;
+  const resultEl = document.getElementById('analyze-result');
+
+  const payload = url ? {url: url} : {text: text};
+  if (!url && !text.trim()) {
+    resultEl.textContent = MSG.pasteFirst;
+    resultEl.style.color = '#e07b3a';
+    return;
+  }
+  resultEl.textContent = MSG.analyzing;
+  resultEl.style.color = '#555555';
+  fetch('{{ url_for("parse_input") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) {
+        resultEl.textContent = data.error;
+        resultEl.style.color = '#d9534f';
+        return;
+      }
+      if (data.raw_text) {
+        document.getElementById('raw_input').value = data.raw_text;
+      }
+      let filled = [];
+      if (data.image) { document.getElementById('image').value = data.image; filled.push('image'); }
+      if (data.container_port) { document.getElementById('container_port').value = data.container_port; filled.push('port'); }
+      if (data.data_path) { document.getElementById('data_path').value = data.data_path; filled.push('data'); }
+      if (data.url_env_var) { document.getElementById('url_env_var').value = data.url_env_var; filled.push('url_env_var'); }
+      if (data.env_vars) { document.getElementById('env_vars').value = data.env_vars; filled.push('env_vars'); }
+
+      if (data.image && !document.getElementById('slug').value.trim()) {
+        const slug = data.suggested_slug ? data.suggested_slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') : suggestSlug(data.image);
+        document.getElementById('slug').value = slug;
+        onSlugInput();
+      }
+
+      resultEl.textContent = filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted;
+      resultEl.style.color = filled.length ? '#5ec87a' : '#e07b3a';
+    })
+    .catch(() => {
+      resultEl.textContent = MSG.commError;
+      resultEl.style.color = '#d9534f';
+    });
+}
+
+// Constructeurs de messages paramétrés (évite de dupliquer les traductions
+// côté JS — un seul point de vérité par clé dans i18n.py, rendu ici via
+// des gabarits Jinja déjà traduits pour la langue courante).
+MSG.pathAvailable = function(address) {
+  return {{ t('js_path_available', address='__ADDR__')|tojson }}.replace('__ADDR__', address);
+};
+MSG.pathUsed = function(address, appName) {
+  const suffix = appName ? ' (' + appName + ')' : '';
+  return {{ t('js_path_used', address='__ADDR__', app_name='__SUFFIX__')|tojson }}.replace('__ADDR__', address).replace('__SUFFIX__', suffix);
+};
+MSG.subdomainAvailable = function(domain) {
+  return {{ t('js_subdomain_available', domain='__DOMAIN__')|tojson }}.replace('__DOMAIN__', domain);
+};
+MSG.subdomainExistsEmpty = function(domain) {
+  return {{ t('js_subdomain_exists_empty', domain='__DOMAIN__')|tojson }}.replace('__DOMAIN__', domain);
+};
+MSG.reuseSubdomain = {{ t('js_reuse_subdomain')|tojson }};
+MSG.subdomainUsed = function(domain, suggestion) {
+  return {{ t('js_subdomain_used', domain='__DOMAIN__', suggestion='__SUGGESTION__')|tojson }}.replace('__DOMAIN__', domain).replace('__SUGGESTION__', suggestion);
+};
+</script>
+
+{% endblock %}

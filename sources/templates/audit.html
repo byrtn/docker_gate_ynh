@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ t('title_audit') }}{% endblock %}
+{% block content %}
+
+<h1>{{ t('h1_audit') }}</h1>
+<p class="lead">{{ t('audit_lead') }}</p>
+
+<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_orphan_containers') }}</h2>
+{% if orphan_containers %}
+  {% for c in orphan_containers %}
+    <div class="card">
+      <div class="info">
+        <strong>{{ c.name }}</strong>
+        <span>{{ c.image|join(', ') }} — {{ c.status }}</span>
+      </div>
+      <form method="post" action="{{ url_for('audit_remove_container', name=c.name) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger" type="submit"
+                onclick='return armDelete(this, {{ t("confirm_delete_orphan_container", name=c.name)|tojson }})'>{{ t('btn_delete') }}</button>
+      </form>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="lead" style="margin:0.5rem 0;">{{ t('no_orphan_containers') }}</p>
+{% endif %}
+
+<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_orphan_volumes') }}</h2>
+<p class="lead" style="font-size:0.85rem; margin:0 0 1rem;">{{ t('orphan_volumes_warning') }}</p>
+{% if orphan_volumes %}
+  {% for v in orphan_volumes %}
+    <div class="card">
+      <div class="info"><strong>{{ v.name }}</strong></div>
+      <form method="post" action="{{ url_for('audit_remove_volume', name=v.name) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger" type="submit"
+                onclick='return armDelete(this, {{ t("confirm_delete_orphan_volume", name=v.name)|tojson }})'>{{ t('btn_delete') }}</button>
+      </form>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="lead" style="margin:0.5rem 0;">{{ t('no_orphan_volumes') }}</p>
+{% endif %}
+
+<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_dangling_images') }}</h2>
+{% if dangling_images %}
+  <div class="card">
+    <div class="info">
+      <strong>{{ t('dangling_images_count', count=dangling_images|length) }}</strong>
+      <span>{{ t('total_mb', mb=(dangling_images|sum(attribute='size_mb')|round(1))) }}</span>
+    </div>
+    <form method="post" action="{{ url_for('audit_prune_images') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" type="submit">{{ t('btn_cleanup') }}</button>
+    </form>
+  </div>
+{% else %}
+  <p class="lead" style="margin:0.5rem 0;">{{ t('no_dangling_images') }}</p>
+{% endif %}
+
+<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_empty_domains') }}</h2>
+<p class="lead" style="font-size:0.85rem; margin:0 0 1rem;">{{ t('empty_domains_help') }}</p>
+{% if empty_domains %}
+  {% for d in empty_domains %}
+    <div class="card"><div class="info"><strong>{{ d }}</strong></div></div>
+  {% endfor %}
+{% else %}
+  <p class="lead" style="margin:0.5rem 0;">{{ t('no_empty_domains') }}</p>
+{% endif %}
+
+<div class="center" style="margin-top:2rem;">
+  <a class="btn" href="{{ url_for('index') }}">{{ t('btn_back') }}</a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+source "$(dirname "$0")/_common.sh"
+source /usr/share/yunohost/helpers
+
+ynh_script_progression --message="Arrêt du service..." --weight=5
+systemctl stop "$app" 2>/dev/null || true
+
+ynh_script_progression --message="Vérification de Docker..." --weight=10
+ynh_docker_gate__ensure_docker_installed
+usermod -aG docker "$app"
+
+ynh_script_progression --message="Mise à jour des fichiers de l'application..." --weight=5
+cp -ar ../sources/. "$install_dir/"
+
+ynh_script_progression --message="Mise à jour de l'environnement Python..." --weight=15
+"$venv_dir/bin/pip" install --upgrade pip
+"$venv_dir/bin/pip" install -r "$install_dir/requirements.txt"
+
+chown -R "$app:$app" "$install_dir"
+chmod 750 "$install_dir"
+
+ynh_script_progression --message="Mise à jour des droits sudo ciblés..." --weight=5
+cp ../conf/docker_gate.sudoers /etc/sudoers.d/docker_gate
+sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
+chmod 440 /etc/sudoers.d/docker_gate
+chown root:root /etc/sudoers.d/docker_gate
+visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers généré est invalide, mise à jour interrompue par sécurité."
+
+ynh_script_progression --message="Mise à jour du logo..." --weight=2
+mkdir -p /usr/share/yunohost/applogos
+install -o root -g root -m 0644 ../logo.png "/usr/share/yunohost/applogos/$app.png"
+yunohost user permission update "$app.main" --logo ../logo.png
+
+ynh_script_progression --message="Mise à jour de la configuration systemd..." --weight=5
+ynh_add_systemd_config
+
+ynh_script_progression --message="Mise à jour de la configuration nginx..." --weight=5
+ynh_add_nginx_config
+
+ynh_script_progression --message="Redémarrage du service..." --weight=5
+systemctl restart "$app"
+
+ynh_script_progression --message="Mise à jour terminée." --last

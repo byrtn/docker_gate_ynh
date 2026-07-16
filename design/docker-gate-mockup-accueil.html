@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docker Gate — Maquette</title>
+<style>
+  :root{
+    --navy: #041226;
+    --navy-soft: #16233b;
+    --red: #de2c13;
+    --red-soft: #f2e2de;
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --border: #e6e4df;
+    --text-muted: #6b7280;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background:var(--bg);
+    color:var(--navy);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:960px;
+    margin:0 auto;
+    padding: 28px 20px 100px;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:36px;
+  }
+  .logo{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:800;
+    font-size:19px;
+    letter-spacing:0.5px;
+  }
+  .logo .tri{
+    width:11px;height:11px;
+    background:var(--red);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    display:inline-block;
+  }
+  .lang{
+    font-size:13px;
+    color:var(--text-muted);
+    display:flex;
+    gap:8px;
+  }
+  .lang b{color:var(--navy);text-decoration:underline;text-underline-offset:3px;}
+
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    font-size:12px;
+    color:var(--red);
+    font-weight:700;
+    margin-bottom:10px;
+  }
+  h1{
+    font-size:30px;
+    margin:0 0 6px;
+    letter-spacing:-0.5px;
+  }
+  .sub{
+    color:var(--text-muted);
+    font-size:15px;
+    margin:0 0 28px;
+    max-width:520px;
+    line-height:1.5;
+  }
+
+  .divider{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin: 40px 0 22px;
+  }
+  .divider .line{flex:0 0 40px;height:2px;background:var(--navy);}
+  .divider .line.red{background:var(--red);flex:1;}
+  .divider span{
+    font-size:12px;
+    letter-spacing:2px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  .actions{
+    display:flex;
+    gap:14px;
+    margin-bottom:8px;
+    flex-wrap:wrap;
+  }
+  .btn{
+    border:none;
+    border-radius:10px;
+    padding:15px 22px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .btn.primary{background:var(--red); color:white;}
+  .btn.secondary{background:transparent; color:var(--navy); border:1.5px solid var(--border);}
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap:16px;
+    margin-top:8px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    transition:box-shadow .15s ease, transform .15s ease;
+  }
+  .card:hover{box-shadow:0 8px 24px rgba(4,18,38,0.06); transform:translateY(-2px);}
+  .card-top{display:flex; align-items:center; gap:12px;}
+  .icon{
+    width:44px;height:44px;
+    border-radius:10px;
+    background:var(--navy);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    position:relative;
+  }
+  .icon .tri{
+    width:10px;height:10px;
+    background:var(--red);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+  .card-title{font-weight:700; font-size:15.5px;}
+  .card-domain{font-size:12.5px; color:var(--text-muted); word-break:break-all;}
+  .status{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12px; color:#1a7d43; font-weight:600;
+  }
+  .status .dot{width:7px;height:7px;border-radius:50%;background:#1a7d43;}
+  .card-actions{
+    display:flex; gap:8px; margin-top:auto; padding-top:8px;
+    border-top:1px dashed var(--border);
+  }
+  .card-actions a, .card-actions button{
+    flex:1;
+    text-align:center;
+    font-size:13px;
+    font-weight:600;
+    padding:9px 0;
+    border-radius:8px;
+    text-decoration:none;
+    border:none;
+    cursor:pointer;
+  }
+  .open{background:var(--red-soft); color:var(--red);}
+  .del{background:transparent; color:var(--text-muted); border:1px solid var(--border) !important;}
+
+  .empty{
+    text-align:center;
+    padding:60px 20px;
+    background:var(--card);
+    border:1px dashed var(--border);
+    border-radius:var(--radius);
+    color:var(--text-muted);
+    font-size:14px;
+  }
+
+  footer{
+    margin-top:56px;
+    text-align:center;
+    font-size:12.5px;
+    color:var(--text-muted);
+  }
+  footer b{color:var(--red);}
+
+  .bottom-bar{
+    display:none;
+  }
+
+  @media (max-width: 600px){
+    .wrap{padding:20px 16px 110px;}
+    h1{font-size:24px;}
+    .actions{display:none;}
+    .grid{grid-template-columns:1fr;}
+    .bottom-bar{
+      display:flex;
+      position:fixed;
+      bottom:0; left:0; right:0;
+      background:white;
+      border-top:1px solid var(--border);
+      padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+      gap:10px;
+      z-index:10;
+    }
+    .bottom-bar .btn{flex:1; justify-content:center; padding:14px 10px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo"><span class="tri"></span> WAPPOS <span style="color:var(--text-muted);font-weight:500;">docker gate</span></div>
+    <div class="lang"><b>FR</b> · EN</div>
+  </header>
+
+  <div class="eyebrow">Docker Gate — Wappos v2</div>
+  <h1>Vos apps conteneurisées</h1>
+  <p class="sub">Ajoutez, exposez et gérez vos conteneurs Docker directement depuis YunoHost, sans configuration manuelle.</p>
+
+  <div class="actions">
+    <button class="btn primary">+ Ajouter une app Docker</button>
+    <button class="btn secondary">Audit &amp; nettoyage</button>
+  </div>
+
+  <div class="divider"><div class="line"></div><span>3 apps installées</span><div class="line red"></div></div>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-top">
+        <div class="icon"><span class="tri"></span></div>
+        <div>
+          <div class="card-title">Uptime Kuma</div>
+          <div class="card-domain">kuma.wappos.fr</div>
+        </div>
+      </div>
+      <div class="status"><span class="dot"></span> En ligne · certificat valide</div>
+      <div class="card-actions">
+        <a href="#" class="open">Ouvrir ↗</a>
+        <button class="del">Supprimer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="icon"><span class="tri"></span></div>
+        <div>
+          <div class="card-title">n8n</div>
+          <div class="card-domain">wappos.fr/n8n</div>
+        </div>
+      </div>
+      <div class="status"><span class="dot"></span> En ligne · certificat valide</div>
+      <div class="card-actions">
+        <a href="#" class="open">Ouvrir ↗</a>
+        <button class="del">Supprimer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="icon"><span class="tri"></span></div>
+        <div>
+          <div class="card-title">Portainer</div>
+          <div class="card-domain">portainer.wappos.fr</div>
+        </div>
+      </div>
+      <div class="status"><span class="dot"></span> En ligne · certificat valide</div>
+      <div class="card-actions">
+        <a href="#" class="open">Ouvrir ↗</a>
+        <button class="del">Supprimer</button>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Un produit <b>BYRTN</b> — souveraineté numérique.
+  </footer>
+</div>
+
+<div class="bottom-bar">
+  <button class="btn secondary">Audit</button>
+  <button class="btn primary">+ Ajouter</button>
+</div>
+
+</body>
+</html>

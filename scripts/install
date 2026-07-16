@@ -1,0 +1,101 @@
+#!/bin/bash
+
+source "$(dirname "$0")/_common.sh"
+source /usr/share/yunohost/helpers
+
+#=================================================
+# INSTALL DOCKER (si nécessaire)
+#=================================================
+ynh_script_progression --message="Vérification / installation de Docker CE..." --weight=30
+
+ynh_docker_gate__ensure_docker_installed
+
+# Le système utilisateur de l'app doit pouvoir piloter Docker
+usermod -aG docker "$app"
+
+#=================================================
+# DEPLOY SOURCE FILES
+#=================================================
+ynh_script_progression --message="Déploiement des fichiers de l'application..." --weight=5
+
+mkdir -p "$install_dir"
+cp -ar ../sources/. "$install_dir/"
+
+# Langue par défaut de l'interface (voir manifest.toml, question
+# default_language) — repli utilisé par app.py tant que l'utilisateur n'a
+# pas explicitement choisi via le sélecteur EN/FR de l'interface (cookie).
+mkdir -p "$install_dir/data"
+echo -n "$default_language" > "$install_dir/data/default_language.txt"
+
+#=================================================
+# PYTHON VENV
+#=================================================
+ynh_script_progression --message="Mise en place de l'environnement Python..." --weight=15
+
+python3 -m venv "$venv_dir"
+"$venv_dir/bin/pip" install --upgrade pip
+"$venv_dir/bin/pip" install -r "$install_dir/requirements.txt"
+
+#=================================================
+# PERMISSIONS
+#=================================================
+chown -R "$app:$app" "$install_dir"
+chmod 750 "$install_dir"
+
+#=================================================
+# SUDOERS (droits ciblés, voir conf/docker_gate.sudoers)
+#=================================================
+ynh_script_progression --message="Configuration des droits sudo ciblés..." --weight=5
+
+cp ../conf/docker_gate.sudoers /etc/sudoers.d/docker_gate
+sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
+chmod 440 /etc/sudoers.d/docker_gate
+chown root:root /etc/sudoers.d/docker_gate
+visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers généré est invalide, installation interrompue par sécurité."
+
+#=================================================
+# LOGO (panneau d'administration ET portail utilisateur YunoHost)
+#=================================================
+# Deux mécanismes DISTINCTS, découverts le 15/07/2026 (le premier seul ne
+# suffit pas — logo visible dans l'admin mais absent de la tuile du portail) :
+# 1) Panneau d'administration (yunohost/app.py, fonction app_info) : astuce
+#    de personnalisation locale pour les apps hors catalogue officiel — un
+#    fichier "$app.png" dans /usr/share/yunohost/applogos/ est utilisé en
+#    priorité s'il existe.
+# 2) Tuile du portail utilisateur (yunohost/app.py, app_portal_info) : lit
+#    UNIQUEMENT le logo_hash stocké sur la permission "$app.main" — sans
+#    rapport avec le fichier "$app.png" du point 1. Se règle via la commande
+#    officielle "yunohost user permission update $app.main --logo <fichier>"
+#    (yunohost/permission.py), qui calcule le hash et pose le fichier lui-même
+#    — jamais besoin de le faire à la main.
+ynh_script_progression --message="Installation du logo..." --weight=2
+
+mkdir -p /usr/share/yunohost/applogos
+install -o root -g root -m 0644 ../logo.png "/usr/share/yunohost/applogos/$app.png"
+yunohost user permission update "$app.main" --logo ../logo.png
+
+#=================================================
+# SYSTEMD CONFIGURATION
+#=================================================
+ynh_script_progression --message="Configuration du service systemd..." --weight=5
+
+ynh_add_systemd_config
+
+#=================================================
+# NGINX CONFIGURATION
+#=================================================
+ynh_script_progression --message="Configuration du serveur web..." --weight=5
+
+ynh_add_nginx_config
+
+#=================================================
+# START SERVICE
+#=================================================
+ynh_script_progression --message="Démarrage de Docker Gate..." --weight=10
+
+yunohost service add "$app" --description="Docker Gate for YunoHost" --log="/var/log/$app/$app.log"
+
+systemctl enable "$app"
+systemctl start "$app"
+
+ynh_script_progression --message="Installation terminée." --last
