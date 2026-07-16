@@ -24,7 +24,7 @@
     color: var(--color-text);
     font-family: 'Montserrat', -apple-system, 'Segoe UI', sans-serif;
     min-height: 100vh;
-    padding: 3rem 1.5rem 5rem;
+    padding: 3.5rem 1.5rem 5rem;
   }
   .wrap { max-width: 720px; margin: 0 auto; position: relative; }
   .eyebrow {
@@ -33,11 +33,11 @@
     letter-spacing: 0.15em;
     font-size: 0.85rem;
     text-transform: uppercase;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     text-align: center;
   }
-  h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1rem; text-align: center; color: var(--color-primary); }
-  p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2rem; }
+  h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1.25rem; text-align: center; color: var(--color-primary); }
+  p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2.25rem; }
   .btn {
     display: inline-block;
     border: 1px solid var(--color-primary);
@@ -59,13 +59,13 @@
     background: var(--color-bg-pure);
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    padding: 1.2rem 1.5rem;
-    margin-bottom: 1rem;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.25rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 1.25rem;
   }
   .card .info strong { font-size: 1.05rem; }
   .card .info span { display: block; color: var(--color-text-dim); font-size: 0.85rem; margin-top: 0.2rem; }
@@ -77,7 +77,7 @@
   .flash-warning { background: rgba(224, 123, 58, 0.1); border: 1px solid rgba(224, 123, 58, 0.5); }
   .summary-list { list-style: none; padding: 0; margin: 0; }
   .summary-list li { padding: 0.4rem 0; font-size: 0.9rem; }
-  .field { margin-bottom: 1.3rem; }
+  .field { margin-bottom: 1.6rem; }
   .field label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; color: var(--color-text); font-weight: 500; }
   .field select option {
     color: var(--color-text);
@@ -106,13 +106,23 @@
   }
   .text-input.monospace { font-family: 'Courier New', monospace; font-size: 0.85rem; }
   .field small { display: block; color: var(--color-text-dim); font-size: 0.8rem; margin-top: 0.3rem; }
-  .mode-block { border: 1px solid var(--color-border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background: var(--color-bg-pure); }
-  .footer { text-align: center; margin-top: 3rem; font-size: 0.85rem; color: var(--color-text-dim); }
+  .mode-block { border: 1px solid var(--color-border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; background: var(--color-bg-pure); }
+  .footer { text-align: center; margin-top: 3.5rem; font-size: 0.85rem; color: var(--color-text-dim); }
   .footer b { color: var(--color-accent); }
   a { color: var(--color-primary-2); }
   .lang-switcher { position: absolute; top: 1rem; right: 1.5rem; font-size: 0.8rem; }
   .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
   .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
+
+  /* Robustesse mobile (chantier 2, 16/07/2026) : un peu moins de marge
+     latérale sous 480px pour redonner de la largeur utile au contenu
+     (formulaires, cartes) sans rien casser — aucun débordement constaté
+     avant ce changement, ceci est un raffinement, pas un correctif. */
+  @media (max-width: 480px) {
+    body { padding: 2.5rem 1.1rem 4rem; }
+    .card { padding: 1.2rem 1.3rem; }
+    .mode-block { padding: 1rem; }
+  }
 </style>
 </head>
 <body>
