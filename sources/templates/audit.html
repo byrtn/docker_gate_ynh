@@ -2,73 +2,161 @@
 {% block title %}{{ t('title_audit') }}{% endblock %}
 {% block content %}
 
+{% set bulk_count = orphan_containers|length + dangling_images|length %}
+{% set bulk_plural = 's' if bulk_count > 1 else '' %}
+
 <h1>{{ t('h1_audit') }}</h1>
 <p class="lead">{{ t('audit_lead') }}</p>
 
-<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_orphan_containers') }}</h2>
+<div class="audit-summary">
+  <div class="stat {{ 'warn' if orphan_containers else 'clean' }}">
+    <div class="n">{{ orphan_containers|length }}</div>
+    <div class="l">{{ t('h2_orphan_containers') }}</div>
+  </div>
+  <div class="stat {{ 'warn' if orphan_volumes else 'clean' }}">
+    <div class="n">{{ orphan_volumes|length }}</div>
+    <div class="l">{{ t('h2_orphan_volumes') }}</div>
+  </div>
+  <div class="stat {{ 'warn' if dangling_images else 'clean' }}">
+    <div class="n">{{ dangling_images|length }}</div>
+    <div class="l">{{ t('h2_dangling_images') }}</div>
+  </div>
+  <div class="stat {{ 'warn' if empty_domains else 'clean' }}">
+    <div class="n">{{ empty_domains|length }}</div>
+    <div class="l">{{ t('h2_empty_domains') }}</div>
+  </div>
+</div>
+
+<div class="global-action">
+  <button type="button" class="btn btn-primary" id="clean-all-btn" {{ 'disabled' if bulk_count == 0 else '' }}
+          onclick="armCleanAll(this)">{{ t('btn_cleanup_all', n=bulk_count, plural=bulk_plural) }}</button>
+</div>
+
+<div class="divider {{ '' if orphan_containers else 'clean' }}"><div class="line"></div><span>{{ t('h2_orphan_containers') }}</span><span class="count">{{ orphan_containers|length }}</span><div class="line red"></div></div>
 {% if orphan_containers %}
-  {% for c in orphan_containers %}
-    <div class="card">
-      <div class="info">
-        <strong>{{ c.name }}</strong>
-        <span>{{ c.image|join(', ') }} — {{ c.status }}</span>
+  <div class="row-list">
+    {% for c in orphan_containers %}
+      <div class="row">
+        <span class="dot"></span>
+        <div class="info">
+          <div class="name">{{ c.name }}</div>
+          <div class="meta">{{ c.image|join(', ') }} — {{ c.status }}</div>
+        </div>
+        <span class="tag">Docker</span>
+        <form method="post" action="{{ url_for('audit_remove_container', name=c.name) }}" class="bulk-target">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="del" type="submit"
+                  onclick='return armDelete(this, {{ t("confirm_delete_orphan_container", name=c.name)|tojson }})'>{{ t('btn_delete') }}</button>
+        </form>
       </div>
-      <form method="post" action="{{ url_for('audit_remove_container', name=c.name) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-danger" type="submit"
-                onclick='return armDelete(this, {{ t("confirm_delete_orphan_container", name=c.name)|tojson }})'>{{ t('btn_delete') }}</button>
-      </form>
-    </div>
-  {% endfor %}
-{% else %}
-  <p class="lead" style="margin:0.5rem 0;">{{ t('no_orphan_containers') }}</p>
-{% endif %}
-
-<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_orphan_volumes') }}</h2>
-<p class="lead" style="font-size:0.85rem; margin:0 0 1rem;">{{ t('orphan_volumes_warning') }}</p>
-{% if orphan_volumes %}
-  {% for v in orphan_volumes %}
-    <div class="card">
-      <div class="info"><strong>{{ v.name }}</strong></div>
-      <form method="post" action="{{ url_for('audit_remove_volume', name=v.name) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-danger" type="submit"
-                onclick='return armDelete(this, {{ t("confirm_delete_orphan_volume", name=v.name)|tojson }})'>{{ t('btn_delete') }}</button>
-      </form>
-    </div>
-  {% endfor %}
-{% else %}
-  <p class="lead" style="margin:0.5rem 0;">{{ t('no_orphan_volumes') }}</p>
-{% endif %}
-
-<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_dangling_images') }}</h2>
-{% if dangling_images %}
-  <div class="card">
-    <div class="info">
-      <strong>{{ t('dangling_images_count', count=dangling_images|length) }}</strong>
-      <span>{{ t('total_mb', mb=(dangling_images|sum(attribute='size_mb')|round(1))) }}</span>
-    </div>
-    <form method="post" action="{{ url_for('audit_prune_images') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-danger" type="submit">{{ t('btn_cleanup') }}</button>
-    </form>
+    {% endfor %}
   </div>
 {% else %}
-  <p class="lead" style="margin:0.5rem 0;">{{ t('no_dangling_images') }}</p>
+  <div class="clean-state">{{ t('no_orphan_containers') }}</div>
 {% endif %}
 
-<h2 style="margin-top:2rem; font-size:1.1rem;">{{ t('h2_empty_domains') }}</h2>
-<p class="lead" style="font-size:0.85rem; margin:0 0 1rem;">{{ t('empty_domains_help') }}</p>
-{% if empty_domains %}
-  {% for d in empty_domains %}
-    <div class="card"><div class="info"><strong>{{ d }}</strong></div></div>
-  {% endfor %}
+<div class="divider {{ '' if orphan_volumes else 'clean' }}"><div class="line"></div><span>{{ t('h2_orphan_volumes') }}</span><span class="count">{{ orphan_volumes|length }}</span><div class="line red"></div></div>
+<p class="lead" style="font-size:0.82rem; margin:0 0 1rem; text-align:left;">{{ t('orphan_volumes_warning') }}</p>
+{% if orphan_volumes %}
+  <div class="row-list">
+    {% for v in orphan_volumes %}
+      <div class="row">
+        <span class="dot"></span>
+        <div class="info"><div class="name">{{ v.name }}</div></div>
+        <span class="tag">Volume</span>
+        <form method="post" action="{{ url_for('audit_remove_volume', name=v.name) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="del" type="submit"
+                  onclick='return armDelete(this, {{ t("confirm_delete_orphan_volume", name=v.name)|tojson }})'>{{ t('btn_delete') }}</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
 {% else %}
-  <p class="lead" style="margin:0.5rem 0;">{{ t('no_empty_domains') }}</p>
+  <div class="clean-state">{{ t('no_orphan_volumes') }}</div>
+{% endif %}
+
+<div class="divider {{ '' if dangling_images else 'clean' }}"><div class="line"></div><span>{{ t('h2_dangling_images') }}</span><span class="count">{{ dangling_images|length }}</span><div class="line red"></div></div>
+{% if dangling_images %}
+  <div class="row-list">
+    <div class="row">
+      <span class="dot"></span>
+      <div class="info">
+        <div class="name">{{ t('dangling_images_count', count=dangling_images|length) }}</div>
+        <div class="meta">{{ t('total_mb', mb=(dangling_images|sum(attribute='size_mb')|round(1))) }}</div>
+      </div>
+      <span class="tag">Image</span>
+      <form method="post" action="{{ url_for('audit_prune_images') }}" class="bulk-target">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="del" type="submit">{{ t('btn_cleanup') }}</button>
+      </form>
+    </div>
+  </div>
+{% else %}
+  <div class="clean-state">{{ t('no_dangling_images') }}</div>
+{% endif %}
+
+<div class="divider {{ '' if empty_domains else 'clean' }}"><div class="line"></div><span>{{ t('h2_empty_domains') }}</span><span class="count">{{ empty_domains|length }}</span><div class="line red"></div></div>
+<p class="lead" style="font-size:0.82rem; margin:0 0 1rem; text-align:left;">{{ t('empty_domains_help') }}</p>
+{% if empty_domains %}
+  <div class="row-list">
+    {% for d in empty_domains %}
+      <div class="row">
+        <span class="dot"></span>
+        <div class="info"><div class="name">{{ d }}</div></div>
+        <span class="tag">Domaine</span>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="clean-state">{{ t('no_empty_domains') }}</div>
 {% endif %}
 
 <div class="center" style="margin-top:2rem;">
   <a class="btn" href="{{ url_for('index') }}">{{ t('btn_back') }}</a>
 </div>
+
+<div class="bottom-bar">
+  <button type="button" class="btn btn-primary" id="clean-all-btn-mobile" {{ 'disabled' if bulk_count == 0 else '' }}
+          onclick="armCleanAll(this)">{{ t('btn_cleanup_all', n=bulk_count, plural=bulk_plural) }}</button>
+</div>
+
+<script>
+// Nettoyage groupé (chantier 3-bis, 16/07/2026) : ne réutilise QUE les
+// formulaires déjà existants (conteneurs orphelins + images dangling,
+// classe .bulk-target), chacun avec son propre jeton CSRF déjà rendu par
+// le serveur — aucune nouvelle route, aucun nouveau droit. Les volumes
+// orphelins sont volontairement exclus (voir orphan_volumes_warning
+// ci-dessus et le commentaire de ynh_manager.py : "action prudente, un
+// par un, jamais groupée" — risque de perte de données réelles).
+// Armement à deux clics, même principe que armDelete().
+function armCleanAll(btn) {
+  if (btn.dataset.armed === '1') {
+    runCleanAll(btn);
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.dataset.originalText = btn.textContent;
+  btn.textContent = CONFIRM_LABEL;
+  clearTimeout(btn._armTimer);
+  btn._armTimer = setTimeout(function () {
+    btn.textContent = btn.dataset.originalText;
+    btn.dataset.armed = '0';
+  }, 4000);
+}
+
+function runCleanAll(btn) {
+  const forms = Array.from(document.querySelectorAll('form.bulk-target'));
+  document.querySelectorAll('#clean-all-btn, #clean-all-btn-mobile').forEach(b => { b.disabled = true; b.textContent = '…'; });
+  (async () => {
+    for (const form of forms) {
+      try {
+        await fetch(form.action, { method: 'POST', body: new FormData(form) });
+      } catch (e) { /* best-effort : on continue malgré un échec isolé */ }
+    }
+    window.location.reload();
+  })();
+}
+</script>
 
 {% endblock %}

@@ -424,6 +424,10 @@ STRINGS = {
     "dangling_images_count": {"en": "{count} unused image(s)", "fr": "{count} image(s) inutilisée(s)"},
     "total_mb": {"en": "{mb} MB total", "fr": "{mb} Mo au total"},
     "btn_cleanup": {"en": "Clean up", "fr": "Nettoyer"},
+    "btn_cleanup_all": {
+        "en": "Clean up {n} detected leftover{plural}",
+        "fr": "Nettoyer {n} résidu{plural} détecté{plural}",
+    },
     "no_dangling_images": {"en": "No unused image found.", "fr": "Aucune image inutilisée trouvée."},
     "h2_empty_domains": {"en": "Empty YunoHost domains", "fr": "Domaines YunoHost vides"},
     "empty_domains_help": {
