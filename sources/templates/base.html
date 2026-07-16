@@ -6,17 +6,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   :root {
-    /* Palette BYRTN/Wappos (charte graphique wappify.byrtn.fr) — thème
-       clair type "System", 15/07/2026, remplace l'ancien thème sombre. */
-    --color-bg: #fafafa;
-    --color-bg-pure: #ffffff;
-    --color-primary: #1e3a5f;
-    --color-primary-2: #0d4f8b;
-    --color-accent: #e07b3a;
-    --color-text: #1a1a1a;
-    --color-text-dim: #555555;
-    --color-border: rgba(30, 58, 95, 0.15);
-    --color-danger: #d9534f;
+    /* Thème "Docker Gate" (chantier 3, 16/07/2026) — repris à l'identique de
+       docs/02-wappos/docker_gate_ynh/design/docker-gate-mockup-accueil.html,
+       tokens de couleur/rayon volontairement fixes (pas d'improvisation). */
+    --color-bg: #F7F7F5;
+    --color-bg-pure: #FFFFFF;
+    --color-primary: #041226;
+    --color-primary-2: #041226;
+    --color-accent: #DE2C13;
+    --color-accent-soft: #F2E2DE;
+    --color-text: #041226;
+    --color-text-dim: #6B7280;
+    --color-border: #E6E4DF;
+    --color-danger: #DE2C13;
+    --color-success: #1A7D43;
+    --radius-card: 14px;
+    --radius-btn: 10px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -27,6 +32,16 @@
     padding: 3.5rem 1.5rem 5rem;
   }
   .wrap { max-width: 720px; margin: 0 auto; position: relative; }
+
+  /* --- Header : logo + triangle (motif repris du logo Docker Gate,
+     chantier 1) + sélecteur de langue --- */
+  .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
+  .app-header .logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; color: var(--color-primary); }
+  .tri { width: 0.65rem; height: 0.65rem; background: var(--color-accent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); display: inline-block; flex-shrink: 0; }
+  .lang-switcher { font-size: 0.8rem; }
+  .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
+  .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
+
   .eyebrow {
     color: var(--color-accent);
     font-weight: 700;
@@ -38,27 +53,43 @@
   }
   h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1.25rem; text-align: center; color: var(--color-primary); }
   p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2.25rem; }
+
+  /* --- Boutons : secondaire (contour navy, par défaut) / primaire (rouge
+     plein, action principale) --- */
   .btn {
-    display: inline-block;
-    border: 1px solid var(--color-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1.5px solid var(--color-border);
     color: var(--color-primary);
-    background: var(--color-bg-pure);
+    background: transparent;
     text-decoration: none;
-    padding: 0.7rem 1.8rem;
-    border-radius: 4px;
-    font-weight: 500;
+    padding: 0.7rem 1.4rem;
+    border-radius: var(--radius-btn);
+    font-weight: 600;
     cursor: pointer;
     font-size: 0.95rem;
   }
-  .btn:hover { background: var(--color-primary); color: var(--color-bg-pure); }
-  .btn-danger { border-color: var(--color-danger); color: var(--color-danger); }
-  .btn-danger:hover { background: var(--color-danger); color: #fff; }
-  .btn-danger.btn-armed { background: var(--color-danger); color: #fff; }
+  .btn:hover { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  .btn-primary:hover { background: #b8230f; border-color: #b8230f; color: #fff; }
+  .btn-danger { color: var(--color-text-dim); border-color: var(--color-border); }
+  .btn-danger:hover { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+  .btn-danger.btn-armed { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
   .center { text-align: center; margin: 2rem 0; }
+
+  /* --- Séparateur "ligne navy — texte — ligne rouge", motif du logo --- */
+  .divider { display: flex; align-items: center; gap: 0.9rem; margin: 2.5rem 0 1.4rem; }
+  .divider .line { flex: 0 0 2.5rem; height: 2px; background: var(--color-primary); }
+  .divider .line.red { background: var(--color-accent); flex: 1; }
+  .divider span { font-size: 0.75rem; letter-spacing: 0.12em; color: var(--color-text-dim); text-transform: uppercase; white-space: nowrap; }
+
+  /* --- Cartes génériques (liste /audit, inchangées structurellement) --- */
   .card {
     background: var(--color-bg-pure);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     padding: 1.4rem 1.6rem;
     margin-bottom: 1.25rem;
     display: flex;
@@ -71,10 +102,55 @@
   .card .info span { display: block; color: var(--color-text-dim); font-size: 0.85rem; margin-top: 0.2rem; }
   .card a.link { color: var(--color-accent); }
   form.inline { display: inline; }
-  .flash { padding: 0.8rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.9rem; }
-  .flash-success { background: rgba(80, 200, 120, 0.12); border: 1px solid rgba(80, 200, 120, 0.5); }
-  .flash-error { background: rgba(217, 83, 79, 0.1); border: 1px solid rgba(217, 83, 79, 0.5); }
-  .flash-warning { background: rgba(224, 123, 58, 0.1); border: 1px solid rgba(224, 123, 58, 0.5); }
+
+  /* --- Grille de cartes d'app (page d'accueil, chantier 3) --- */
+  .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.1rem; margin-top: 0.5rem; }
+  .app-card {
+    background: var(--color-bg-pure);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: 1.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .app-card .card-top { display: flex; align-items: center; gap: 0.8rem; }
+  .app-card .icon {
+    width: 2.75rem; height: 2.75rem;
+    border-radius: var(--radius-btn);
+    background: var(--color-primary);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .app-card .card-title { font-weight: 700; font-size: 1rem; word-break: break-word; }
+  .app-card .card-domain { font-size: 0.8rem; color: var(--color-text-dim); word-break: break-all; }
+  .status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--color-success); font-weight: 600; }
+  .status .dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
+  .app-card .check-inline { display: block; font-weight: normal; font-size: 0.8rem; color: var(--color-text-dim); margin-bottom: 0.3rem; }
+  .card-actions { display: flex; gap: 0.5rem; margin-top: auto; padding-top: 0.6rem; border-top: 1px dashed var(--color-border); }
+  .card-actions a, .card-actions button {
+    flex: 1;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.55rem 0;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .card-actions .open { background: var(--color-accent-soft); color: var(--color-accent); }
+  .card-actions .del { background: transparent; color: var(--color-text-dim); border: 1px solid var(--color-border) !important; }
+  .card-actions .del:hover, .card-actions .del.btn-armed { background: var(--color-danger); border-color: var(--color-danger) !important; color: #fff; }
+
+  .actions { display: flex; gap: 0.9rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .bottom-bar { display: none; }
+
+  .flash { padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .flash-success { background: rgba(26, 125, 67, 0.1); border: 1px solid rgba(26, 125, 67, 0.4); }
+  .flash-error { background: var(--color-accent-soft); border: 1px solid rgba(222, 44, 19, 0.4); }
+  .flash-warning { background: rgba(4, 18, 38, 0.05); border: 1px solid var(--color-border); }
   .summary-list { list-style: none; padding: 0; margin: 0; }
   .summary-list li { padding: 0.4rem 0; font-size: 0.9rem; }
   .field { margin-bottom: 1.6rem; }
@@ -86,7 +162,7 @@
   .field input[type=text], .field input[type=number], .field select, .field textarea {
     width: 100%;
     padding: 0.6rem 0.8rem;
-    border-radius: 4px;
+    border-radius: 8px;
     border: 1px solid var(--color-border);
     background: var(--color-bg-pure);
     color: var(--color-text);
@@ -97,7 +173,7 @@
   .text-input {
     width: 100%;
     padding: 0.6rem 0.8rem;
-    border-radius: 4px;
+    border-radius: 8px;
     border: 1px solid var(--color-border);
     background: var(--color-bg-pure);
     color: var(--color-text);
@@ -106,13 +182,14 @@
   }
   .text-input.monospace { font-family: 'Courier New', monospace; font-size: 0.85rem; }
   .field small { display: block; color: var(--color-text-dim); font-size: 0.8rem; margin-top: 0.3rem; }
-  .mode-block { border: 1px solid var(--color-border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; background: var(--color-bg-pure); }
-  .footer { text-align: center; margin-top: 3.5rem; font-size: 0.85rem; color: var(--color-text-dim); }
+  .mode-block { border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 1.25rem; margin-bottom: 1.5rem; background: var(--color-bg-pure); }
+  .footer-divider { display: flex; align-items: center; gap: 0.7rem; margin-top: 3.5rem; }
+  .footer-divider .line { flex: 1; height: 2px; background: var(--color-primary); }
+  .footer-divider .line.red { background: var(--color-accent); }
+  .footer-divider .tri { margin: 0 0.2rem; }
+  .footer { text-align: center; margin-top: 1.25rem; font-size: 0.85rem; color: var(--color-text-dim); }
   .footer b { color: var(--color-accent); }
   a { color: var(--color-primary-2); }
-  .lang-switcher { position: absolute; top: 1rem; right: 1.5rem; font-size: 0.8rem; }
-  .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
-  .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
 
   /* Robustesse mobile (chantier 2, 16/07/2026) : un peu moins de marge
      latérale sous 480px pour redonner de la largeur utile au contenu
@@ -123,14 +200,35 @@
     .card { padding: 1.2rem 1.3rem; }
     .mode-block { padding: 1rem; }
   }
+
+  /* Barre d'actions fixe en bas d'écran sur mobile (page d'accueil
+     uniquement, chantier 3) — le HTML de .bottom-bar n'est présent que
+     dans index.html, ces règles restent inertes ailleurs. */
+  @media (max-width: 600px) {
+    .actions { display: none; }
+    .bottom-bar {
+      display: flex;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--color-bg-pure);
+      border-top: 1px solid var(--color-border);
+      padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom));
+      gap: 0.6rem;
+      z-index: 10;
+    }
+    .bottom-bar .btn { flex: 1; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="lang-switcher">
-    <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
-    <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
-  </div>
+  <header class="app-header">
+    <div class="logo"><span class="tri"></span> Docker Gate</div>
+    <div class="lang-switcher">
+      <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
+      <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
+    </div>
+  </header>
   <div class="eyebrow">Docker Gate — Wappos v2</div>
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
@@ -139,6 +237,7 @@
     {% endfor %}
   {% endwith %}
   {% block content %}{% endblock %}
+  <div class="footer-divider"><div class="line"></div><span class="tri"></span><div class="line red"></div></div>
   <div class="footer">Un produit <b>BYRTN</b> — souveraineté numérique.</div>
 </div>
 <script>

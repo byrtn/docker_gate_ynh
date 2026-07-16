@@ -91,7 +91,7 @@
       </select>
     </div>
     <small>{{ t('address_help') }}</small>
-    <div style="margin-top:0.6rem; padding:0.6rem 0.8rem; background:rgba(224,123,58,0.12); border-left:3px solid #e07b3a; border-radius:4px; font-size:0.85rem;">
+    <div style="margin-top:0.6rem; padding:0.6rem 0.8rem; background:rgba(4,18,38,0.05); border-left:3px solid var(--color-primary); border-radius:8px; font-size:0.85rem;">
       {{ t('dns_reminder') }}
     </div>
     <div id="subdomain-status" style="margin-top:0.8rem;"></div>
@@ -142,7 +142,7 @@
   </details>
 
   <div class="center" style="margin-top:1.5rem;">
-    <button class="btn" type="submit">{{ t('btn_install') }}</button>
+    <button class="btn btn-primary" type="submit">{{ t('btn_install') }}</button>
   </div>
 </form>
 
@@ -207,11 +207,11 @@ function checkPath() {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'free') {
-        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(94,200,122,0.15); border-left:3px solid #5ec87a; border-radius:4px;">'
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(26,125,67,0.12); border-left:3px solid #1a7d43; border-radius:8px;">'
           + MSG.pathAvailable(data.domain + data.path) + '</div>';
       } else if (data.status === 'used') {
         pathBlocked = true;
-        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(217,83,79,0.15); border-left:3px solid #d9534f; border-radius:4px;">'
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(222,44,19,0.12); border-left:3px solid #de2c13; border-radius:8px;">'
           + MSG.pathUsed(data.domain + data.path, data.app_name) + '</div>';
       } else {
         statusEl.innerHTML = '';
@@ -242,17 +242,17 @@ function checkSubdomain() {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'free') {
-        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(94,200,122,0.15); border-left:3px solid #5ec87a; border-radius:4px;">'
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(26,125,67,0.12); border-left:3px solid #1a7d43; border-radius:8px;">'
           + MSG.subdomainAvailable(data.domain) + '</div>';
       } else if (data.status === 'exists_empty') {
-        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(224,123,58,0.15); border-left:3px solid #e07b3a; border-radius:4px;">'
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(4,18,38,0.06); border-left:3px solid #041226; border-radius:8px;">'
           + MSG.subdomainExistsEmpty(data.domain) + '<br>'
           + '<label style="font-weight:normal; display:inline-block; margin-top:0.4rem;">'
           + '<input type="checkbox" onchange="document.getElementById(\'reuse_existing_domain\').value = this.checked ? \'on\' : \'\'"> '
           + MSG.reuseSubdomain + '</label></div>';
       } else if (data.status === 'exists_used') {
         subdomainBlocked = true;
-        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(217,83,79,0.15); border-left:3px solid #d9534f; border-radius:4px;">'
+        statusEl.innerHTML = '<div style="padding:0.6rem 0.8rem; background:rgba(222,44,19,0.12); border-left:3px solid #de2c13; border-radius:8px;">'
           + MSG.subdomainUsed(data.domain, data.suggestion) + '</div>';
       }
     })
@@ -300,11 +300,11 @@ function analyze() {
   const payload = url ? {url: url} : {text: text};
   if (!url && !text.trim()) {
     resultEl.textContent = MSG.pasteFirst;
-    resultEl.style.color = '#e07b3a';
+    resultEl.style.color = '#6B7280';
     return;
   }
   resultEl.textContent = MSG.analyzing;
-  resultEl.style.color = '#555555';
+  resultEl.style.color = '#6B7280';
   fetch('{{ url_for("parse_input") }}', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -314,7 +314,7 @@ function analyze() {
     .then(data => {
       if (!data.ok) {
         resultEl.textContent = data.error;
-        resultEl.style.color = '#d9534f';
+        resultEl.style.color = '#DE2C13';
         return;
       }
       if (data.raw_text) {
@@ -334,11 +334,11 @@ function analyze() {
       }
 
       resultEl.textContent = filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted;
-      resultEl.style.color = filled.length ? '#5ec87a' : '#e07b3a';
+      resultEl.style.color = filled.length ? '#1A7D43' : '#6B7280';
     })
     .catch(() => {
       resultEl.textContent = MSG.commError;
-      resultEl.style.color = '#d9534f';
+      resultEl.style.color = '#DE2C13';
     });
 }
 
