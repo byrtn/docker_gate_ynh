@@ -7,6 +7,12 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh3] — 2026-07-17
+
+### Changed
+- The "Docker Gate" title is rendered larger and more prominent again; the
+  "the way to wapp" tagline underneath keeps its previous (smaller) size.
+
 ## [0.2~ynh2] — 2026-07-17
 
 ### Changed
