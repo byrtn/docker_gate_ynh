@@ -7,6 +7,11 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh4] — 2026-07-17
+
+### Fixed
+- Tagline typo: "the way to wapp" corrected to "the way to wappos".
+
 ## [0.2~ynh3] — 2026-07-17
 
 ### Changed
