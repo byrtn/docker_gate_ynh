@@ -1,0 +1,69 @@
+# Changelog
+
+All notable changes to Docker Gate are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to YunoHost's `version~ynhN` scheme (the part before
+`~ynh` is the app's own version; `ynhN` increments for packaging-only changes
+that don't touch the app's behavior).
+
+## [0.2~ynh1] — 2026-07-17
+
+Consolidates a full security/quality audit (8 workstreams) plus a real
+`backup create`/`backup restore` cycle test — all found issues fixed and
+verified on a live instance.
+
+### Security
+- Tightened sudoers rules: removed one dead rule (`app info *`), narrowed two
+  overly broad rules (`app remove *` → `app remove redirect*`, and
+  `user permission update *` → restricted to the fixed logo path — this one
+  could previously change the permission group of *any* app on the server),
+  removed 4 superfluous wildcards.
+
+### Fixed
+- `scripts/install`, `scripts/upgrade` and `scripts/restore` resolved package
+  files (`conf/`, `sources/`, `logo.png`) via a relative path (`../conf/...`)
+  that broke specifically during `yunohost backup restore` (different working
+  directory than install/upgrade). Now resolved from the script's own real
+  location, verified with an actual `backup create`/`app remove`/
+  `backup restore` cycle.
+- The safety guard that was supposed to block removal of Docker Gate while
+  child apps still existed did not actually stop YunoHost's core resource
+  deprovisioning (ports, permission, install dir) — only prevented cleanup by
+  `scripts/remove` itself. Rewritten with an honest warning and full cleanup
+  regardless of outcome.
+- Orphaned Docker volume left behind when container creation succeeded but
+  `containers.run()` failed right after.
+- `data/apps.json` was not written atomically and had no recovery path from a
+  corrupted file — a single bad write (full disk, interrupted process) could
+  break the whole app. Now written via `tempfile` + `os.replace`; a corrupted
+  file is renamed aside (`.corrupted-<timestamp>`) instead of crashing.
+- Three routes (`/remove`, `/audit/remove_container`, `/audit/remove_volume`)
+  had no generic error handling, unlike `/audit/prune_images`.
+- The `/audit` page itself had no error isolation — a single failing check
+  (e.g. `yunohost domain list` unavailable) crashed the whole page instead of
+  showing a partial result with a warning.
+- `scripts/remove`'s interactive removal-confirmation prompt (see Added,
+  below) was only ever translated to French, unlike the rest of the app.
+
+### Added
+- Interactive prompt during `yunohost app remove docker_gate`: if child apps
+  still exist, explicitly offers to remove them (and their data) too, instead
+  of only warning. Requires an explicit yes/no answer (no implicit default on
+  Enter).
+- `LICENSE` now contains the full AGPL-3.0 text instead of a link only.
+- `README.md`/`README_fr.md`, `doc/DESCRIPTION.md`/`DESCRIPTION_fr.md` for
+  catalog packaging conformity (manifest validated against YunoHost's
+  official JSON schema — 0 errors).
+
+### Changed
+- A conditional note now appears under the "clean up N orphaned resources"
+  button on `/audit` when it doesn't cover everything it might sound like it
+  covers (containers/images only, not volumes or empty domains).
+
+---
+
+## [0.1~ynh1] — 2026-07-15
+
+Initial usable release: Docker CE auto-install, one-click container exposure
+behind YunoHost SSO, orphan-resource audit page, EN/FR interface.

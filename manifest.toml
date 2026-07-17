@@ -7,7 +7,7 @@ name = "Docker Gate"
 description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
 description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
 
-version = "0.1~ynh1"
+version = "0.2~ynh1"
 
 maintainers = ["byrtn"]
 

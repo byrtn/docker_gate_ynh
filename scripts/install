@@ -3,6 +3,17 @@
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
+# Chemin vers la racine du paquet, résolu depuis l'emplacement RÉEL de ce
+# script (audit test réel backup/restore, 17/07/2026) — jamais depuis le
+# répertoire courant. `../conf/...` marchait par coïncidence en install/
+# upgrade (YunoHost y exécute le script avec `scripts/` comme répertoire
+# courant), mais un vrai test de `yunohost backup restore` a confirmé que
+# ce n'est PAS vrai en restauration (répertoire courant différent) — le
+# script plantait sur `cp ../conf/docker_gate.sudoers` avec un "Aucun
+# fichier ou dossier de ce type". `$(dirname "$0")` fonctionne dans TOUS
+# les contextes (déjà utilisé pour `_common.sh` juste au-dessus).
+pkg_dir="$(dirname "$0")/.."
+
 #=================================================
 # INSTALL DOCKER (si nécessaire)
 #=================================================
@@ -19,7 +30,21 @@ usermod -aG docker "$app"
 ynh_script_progression --message="Déploiement des fichiers de l'application..." --weight=5
 
 mkdir -p "$install_dir"
-cp -ar ../sources/. "$install_dir/"
+cp -ar "$pkg_dir/sources/." "$install_dir/"
+
+# Copie du sudoers-modèle et du logo DANS install_dir (audit test réel
+# backup/restore, 17/07/2026 — 2ᵉ correctif) : un premier correctif basé
+# sur `$(dirname "$0")` s'est révélé insuffisant — vérifié en conditions
+# réelles que pendant une restauration, YunoHost ne met à disposition QUE
+# le dossier `scripts/` (là où vit ce script), PAS `conf/`/`logo.png`/
+# `sources/` du paquet. `install_dir`, lui, est fidèlement restauré depuis
+# l'archive de sauvegarde (contient déjà `sources/`) — copier aussi ces 2
+# fichiers dedans les rend disponibles à l'identique en install/upgrade
+# ET en restauration, sans dépendre d'un dossier `conf/` qui n'existe pas
+# forcément à côté du script au moment de l'exécution.
+mkdir -p "$install_dir/.package"
+cp "$pkg_dir/conf/docker_gate.sudoers" "$install_dir/.package/docker_gate.sudoers"
+cp "$pkg_dir/logo.png" "$install_dir/.package/logo.png"
 
 # Langue par défaut de l'interface (voir manifest.toml, question
 # default_language) — repli utilisé par app.py tant que l'utilisateur n'a
@@ -47,7 +72,7 @@ chmod 750 "$install_dir"
 #=================================================
 ynh_script_progression --message="Configuration des droits sudo ciblés..." --weight=5
 
-cp ../conf/docker_gate.sudoers /etc/sudoers.d/docker_gate
+cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/docker_gate
 sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
 chmod 440 /etc/sudoers.d/docker_gate
 chown root:root /etc/sudoers.d/docker_gate
@@ -71,8 +96,8 @@ visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers
 ynh_script_progression --message="Installation du logo..." --weight=2
 
 mkdir -p /usr/share/yunohost/applogos
-install -o root -g root -m 0644 ../logo.png "/usr/share/yunohost/applogos/$app.png"
-yunohost user permission update "$app.main" --logo ../logo.png
+install -o root -g root -m 0644 "$install_dir/.package/logo.png" "/usr/share/yunohost/applogos/$app.png"
+yunohost user permission update "$app.main" --logo "$install_dir/.package/logo.png"
 
 #=================================================
 # SYSTEMD CONFIGURATION

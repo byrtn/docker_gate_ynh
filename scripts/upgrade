@@ -3,6 +3,11 @@
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
+# Voir scripts/install pour l'explication complète (audit test réel
+# backup/restore, 17/07/2026) — chemin résolu depuis l'emplacement réel du
+# script, jamais depuis le répertoire courant.
+pkg_dir="$(dirname "$0")/.."
+
 ynh_script_progression --message="Arrêt du service..." --weight=5
 systemctl stop "$app" 2>/dev/null || true
 
@@ -11,7 +16,14 @@ ynh_docker_gate__ensure_docker_installed
 usermod -aG docker "$app"
 
 ynh_script_progression --message="Mise à jour des fichiers de l'application..." --weight=5
-cp -ar ../sources/. "$install_dir/"
+cp -ar "$pkg_dir/sources/." "$install_dir/"
+
+# Voir scripts/install pour l'explication complète (2ᵉ correctif backup/
+# restore, 17/07/2026) — copie DANS install_dir, restauré fidèlement
+# depuis l'archive, contrairement à conf/logo.png du paquet source.
+mkdir -p "$install_dir/.package"
+cp "$pkg_dir/conf/docker_gate.sudoers" "$install_dir/.package/docker_gate.sudoers"
+cp "$pkg_dir/logo.png" "$install_dir/.package/logo.png"
 
 ynh_script_progression --message="Mise à jour de l'environnement Python..." --weight=15
 "$venv_dir/bin/pip" install --upgrade pip
@@ -21,7 +33,7 @@ chown -R "$app:$app" "$install_dir"
 chmod 750 "$install_dir"
 
 ynh_script_progression --message="Mise à jour des droits sudo ciblés..." --weight=5
-cp ../conf/docker_gate.sudoers /etc/sudoers.d/docker_gate
+cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/docker_gate
 sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
 chmod 440 /etc/sudoers.d/docker_gate
 chown root:root /etc/sudoers.d/docker_gate
@@ -29,8 +41,8 @@ visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers
 
 ynh_script_progression --message="Mise à jour du logo..." --weight=2
 mkdir -p /usr/share/yunohost/applogos
-install -o root -g root -m 0644 ../logo.png "/usr/share/yunohost/applogos/$app.png"
-yunohost user permission update "$app.main" --logo ../logo.png
+install -o root -g root -m 0644 "$install_dir/.package/logo.png" "/usr/share/yunohost/applogos/$app.png"
+yunohost user permission update "$app.main" --logo "$install_dir/.package/logo.png"
 
 ynh_script_progression --message="Mise à jour de la configuration systemd..." --weight=5
 ynh_add_systemd_config
