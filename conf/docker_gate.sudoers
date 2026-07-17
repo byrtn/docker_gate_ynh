@@ -17,5 +17,11 @@ __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost diagnosis run *
 # 16/07/2026) — même fichier source fixe à chaque fois, seul le nom de
 # l'instance de destination varie (calculé par notre propre code, jamais
 # saisi par l'utilisateur final).
-__APP__ ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /opt/yunohost/__APP__/sources/static/docker-gate-app-logo.png /usr/share/yunohost/applogos/*.png
+# ⚠️ Chemin sans "sources/" (audit 17/07/2026, docs/02-wappos/audits/2026-07-17-audit-icone-logo-sudoers.md) :
+# scripts/install et scripts/upgrade font `cp -ar ../sources/. "$install_dir/"`,
+# qui APLATIT le contenu de sources/ directement dans $install_dir — le
+# fichier réel vit donc en /opt/yunohost/__APP__/static/..., jamais sous un
+# sous-dossier sources/. Le "/sources/" ci-dessous cassait la correspondance
+# exacte attendue par sudo (aucune règle ne matchait -> mot de passe requis).
+__APP__ ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /opt/yunohost/__APP__/static/docker-gate-app-logo.png /usr/share/yunohost/applogos/*.png
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost user permission update *

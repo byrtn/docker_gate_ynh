@@ -296,6 +296,7 @@ STRINGS = {
     "open_link": {"en": "Open ↗", "fr": "Ouvrir ↗"},
     "public_label": {"en": "public", "fr": "public"},
     "private_label": {"en": "private", "fr": "privé"},
+    "users_label": {"en": "restricted (users)", "fr": "restreint (utilisateurs)"},
     "persistent_data_suffix": {"en": " — persistent data", "fr": " — données persistantes"},
     "checkbox_delete_data": {"en": "Also delete the data", "fr": "Supprimer aussi les données"},
     "checkbox_delete_domain": {"en": "Also delete the domain {domain}", "fr": "Supprimer aussi le domaine {domain}"},
@@ -350,7 +351,14 @@ STRINGS = {
         "en": "📌 Don't forget: a DNS record for this subdomain must already exist with your registrar (or the automatic registrar must be configured in YunoHost).",
         "fr": "📌 N'oublie pas : un enregistrement DNS pour ce sous-domaine doit déjà exister chez ton registrar (ou le registrar automatique doit être configuré dans YunoHost).",
     },
-    "checkbox_public": {"en": "Make this app public (otherwise, restricted to admins)", "fr": "Rendre cette app publique (sinon, accès restreint aux admins)"},
+    # Modèle de permission natif YunoHost à 3 groupes (audit 17/07/2026,
+    # docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md) — les
+    # 3 options correspondent 1:1 aux groupes réels admins/all_users/visitors,
+    # aucune réinvention custom.
+    "visibility_field_label": {"en": "Access", "fr": "Accès"},
+    "visibility_option_admins": {"en": "Administrators only (default)", "fr": "Administrateurs uniquement (par défaut)"},
+    "visibility_option_users": {"en": "All YunoHost accounts", "fr": "Tous les comptes YunoHost"},
+    "visibility_option_public": {"en": "Public (anyone with the link)", "fr": "Public (toute personne connaissant le lien)"},
     "advanced_config": {
         "en": "Advanced configuration (pre-filled automatically, editable if needed)",
         "fr": "Configuration avancée (préremplie automatiquement, modifiable si besoin)",

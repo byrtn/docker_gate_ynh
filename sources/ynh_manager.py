@@ -60,7 +60,15 @@ def _save_state(apps):
 
 
 def list_apps():
-    return _load_state()
+    apps = _load_state()
+    # Rétrocompatibilité (audit 17/07/2026) : les apps créées avant le
+    # passage au modèle à 3 groupes n'ont qu'un booléen "public" en état
+    # disque — déduit ici à la lecture, jamais réécrit, comportement réel
+    # inchangé pour ces apps existantes.
+    for a in apps:
+        if "visibility" not in a:
+            a["visibility"] = "visitors" if a.get("public") else "admins"
+    return apps
 
 
 def _slug_is_valid(slug):
@@ -496,7 +504,7 @@ def check_path_status(domain, path, lang):
     return {"status": "free", "domain": domain, "path": normalized_path}
 
 
-def create_docker_app(slug, image, container_port, mode, domain, domain_parent, path, new_subdomain, public, lang, data_path="", env_vars=None, url_env_var="", reuse_existing_domain=False, on_step=None):
+def create_docker_app(slug, image, container_port, mode, domain, domain_parent, path, new_subdomain, visibility, lang, data_path="", env_vars=None, url_env_var="", reuse_existing_domain=False, on_step=None):
     """Point d'entrée principal de la création d'une app Docker exposée.
 
     mode: "path" ou "subdomain"
@@ -701,7 +709,11 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
 
     # --- Exposition via l'app officielle "redirect" ---
     step("step_expose_app")
-    permission_group = "visitors" if public else "admins"
+    # Passthrough direct sur le vocabulaire natif YunoHost (admins/all_users/
+    # visitors) — audit 17/07/2026, docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md.
+    # Repli sur le plus restrictif si une valeur inattendue arrivait ici
+    # (défense en profondeur, la validation principale est déjà faite dans app.py).
+    permission_group = visibility if visibility in ("admins", "all_users", "visitors") else "admins"
     args_string = (
         f"domain={target_domain}"
         f"&path={target_path}"
@@ -774,7 +786,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         "domain": target_domain,
         "path": target_path,
         "mode": mode,
-        "public": public,
+        "visibility": permission_group,
         "yunohost_app_id": yunohost_app_id,
         "volume_name": volume_name,
         "data_path": data_path or None,

@@ -27,7 +27,7 @@
             <div class="card-domain">{{ app.domain }}{{ app.path }}</div>
           </div>
         </div>
-        <div class="status"><span class="dot"></span>{{ t('public_label') if app.public else t('private_label') }}{{ t('persistent_data_suffix') if app.volume_name else '' }}</div>
+        <div class="status"><span class="dot"></span>{{ t('public_label') if app.visibility == 'visitors' else (t('users_label') if app.visibility == 'all_users' else t('private_label')) }}{{ t('persistent_data_suffix') if app.volume_name else '' }}</div>
         <form method="post" action="{{ url_for('remove', slug=app.slug) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% if app.volume_name %}

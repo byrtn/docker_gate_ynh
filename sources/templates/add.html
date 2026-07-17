@@ -98,11 +98,14 @@
     <input type="hidden" name="reuse_existing_domain" id="reuse_existing_domain" value="">
   </div>
 
+  {% set current_visibility = form.get('visibility', 'admins') if form else 'admins' %}
   <div class="field">
-    <label style="font-weight:normal;">
-      <input type="checkbox" name="public" {{ 'checked' if form and form.public else '' }}>
-      {{ t('checkbox_public') }}
-    </label>
+    <label for="visibility">{{ t('visibility_field_label') }}</label>
+    <select id="visibility" name="visibility">
+      <option value="admins" {{ 'selected' if current_visibility == 'admins' else '' }}>{{ t('visibility_option_admins') }}</option>
+      <option value="all_users" {{ 'selected' if current_visibility == 'all_users' else '' }}>{{ t('visibility_option_users') }}</option>
+      <option value="visitors" {{ 'selected' if current_visibility == 'visitors' else '' }}>{{ t('visibility_option_public') }}</option>
+    </select>
   </div>
 
   <details id="advanced-details">
@@ -141,7 +144,8 @@
     </div>
   </details>
 
-  <div class="center" style="margin-top:1.5rem;">
+  <div class="center" style="margin-top:1.5rem; display:flex; gap:0.8rem; justify-content:center; flex-wrap:wrap;">
+    <a class="btn" href="{{ url_for('index') }}">{{ t('btn_back') }}</a>
     <button class="btn btn-primary" type="submit">{{ t('btn_install') }}</button>
   </div>
 </form>

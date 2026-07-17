@@ -161,7 +161,12 @@ def add():
     domain_parent = request.form.get("domain_parent", "").strip()
     path = request.form.get("path", "").strip()
     new_subdomain = request.form.get("new_subdomain", "").strip().lower()
-    public = request.form.get("public") == "on"
+    # Modèle de permission natif YunoHost à 3 groupes (audit 17/07/2026,
+    # docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md) —
+    # valeur repliée sur "admins" (le plus restrictif) si absente/invalide.
+    visibility = request.form.get("visibility", "admins").strip()
+    if visibility not in ("admins", "all_users", "visitors"):
+        visibility = "admins"
     data_path = request.form.get("data_path", "").strip()
     env_vars_text = request.form.get("env_vars", "").strip()
     url_env_var = request.form.get("url_env_var", "").strip()
@@ -187,7 +192,7 @@ def add():
                 domain_parent=domain_parent,
                 path=path,
                 new_subdomain=new_subdomain,
-                public=public,
+                visibility=visibility,
                 lang=lang,
                 data_path=data_path,
                 env_vars=env_vars,
