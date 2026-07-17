@@ -31,6 +31,9 @@
   <button type="button" class="btn btn-primary" id="clean-all-btn" {{ 'disabled' if bulk_count == 0 else '' }}
           onclick="armCleanAll(this)">{{ t('btn_cleanup_all', n=bulk_count, plural=bulk_plural) }}</button>
 </div>
+{% if orphan_volumes or empty_domains %}
+<p class="lead" style="font-size:0.78rem; margin:-0.4rem 0 1.2rem; text-align:right;">{{ t('bulk_cleanup_scope_note') }}</p>
+{% endif %}
 
 <div class="divider {{ '' if orphan_containers else 'clean' }}"><div class="line"></div><span>{{ t('h2_orphan_containers') }}</span><span class="count">{{ orphan_containers|length }}</span><div class="line red"></div></div>
 {% if orphan_containers %}

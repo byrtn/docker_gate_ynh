@@ -436,6 +436,15 @@ STRINGS = {
         "en": "Clean up {n} detected leftover{plural}",
         "fr": "Nettoyer {n} résidu{plural} détecté{plural}",
     },
+    # Audit chantier 4 (17/07/2026) : ce bouton groupé ne compte et ne
+    # touche jamais les volumes ni les domaines vides (voir commentaire
+    # dans audit.html) — sans cette note, rien à l'écran ne le signalait,
+    # risque de croire que "tout" est nettoyé alors que 2 catégories sur 4
+    # ne le sont jamais par ce bouton.
+    "bulk_cleanup_scope_note": {
+        "en": "Containers and images only — volumes and empty domains are always handled one at a time, below.",
+        "fr": "Conteneurs et images uniquement — les volumes et domaines vides se traitent toujours un par un, ci-dessous.",
+    },
     "no_dangling_images": {"en": "No unused image found.", "fr": "Aucune image inutilisée trouvée."},
     "h2_empty_domains": {"en": "Empty YunoHost domains", "fr": "Domaines YunoHost vides"},
     "empty_domains_help": {
