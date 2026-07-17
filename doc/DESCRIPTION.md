@@ -1,0 +1,1 @@
+Docker Gate turns YunoHost into a one-click gateway for any Dockerized app: paste an image name, a `docker run` command, or a `docker-compose.yml`, and it installs Docker if needed, launches the container, and exposes it behind YunoHost's SSO — no manual nginx or systemd configuration required.
