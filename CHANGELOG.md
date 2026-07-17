@@ -7,6 +7,13 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh2] — 2026-07-17
+
+### Changed
+- New logo artwork: the admin/portal logo (`logo.png`) and the logo applied
+  to each exposed child app's tile (`sources/static/docker-gate-app-logo.png`)
+  were redesigned.
+
 ## [0.2~ynh1] — 2026-07-17
 
 Consolidates a full security/quality audit (8 workstreams) plus a real
