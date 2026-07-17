@@ -290,16 +290,36 @@ def remove(slug):
             flash(w, "warning")
     except ynh_manager.DockerConnectorError as e:
         flash(str(e), "error")
+    except Exception as e:
+        # Audit chantier 5 (17/07/2026, cas limites) : sans ce filet, une
+        # erreur inattendue ici (pas une DockerConnectorError) laissait
+        # Flask afficher une page 500 brute au lieu d'un message clair —
+        # même principe que le filet déjà en place pour la création d'app.
+        flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
     return redirect(url_for("index"))
 
 
 @app.route("/audit")
 def audit():
     lang = get_lang()
-    orphan_containers = ynh_manager.find_orphan_containers()
-    orphan_volumes = ynh_manager.find_orphan_volumes()
-    dangling_images = ynh_manager.find_dangling_images()
-    empty_domains = ynh_manager.find_empty_domains(lang)
+    # Audit chantier 5 (17/07/2026, cas limites) : avant ce correctif, un
+    # incident transitoire sur UN SEUL de ces 4 contrôles (ex: `yunohost
+    # domain list` via sudo -n indisponible un court instant) faisait
+    # planter TOUTE la page avec une erreur 500 brute, y compris les 3
+    # autres contrôles qui, eux, avaient réussi. Chacun est maintenant
+    # isolé : un échec dégrade proprement (liste vide + avertissement),
+    # sans jamais empêcher d'afficher le reste de la page.
+    def _safe(fn, *args):
+        try:
+            return fn(*args)
+        except Exception as e:
+            flash(i18n.t("flash_unexpected_error", lang, error=e), "warning")
+            return []
+
+    orphan_containers = _safe(ynh_manager.find_orphan_containers)
+    orphan_volumes = _safe(ynh_manager.find_orphan_volumes)
+    dangling_images = _safe(ynh_manager.find_dangling_images)
+    empty_domains = _safe(ynh_manager.find_empty_domains, lang)
     return render_template(
         "audit.html",
         orphan_containers=orphan_containers,
@@ -317,6 +337,8 @@ def audit_remove_container(name):
         flash(i18n.t("flash_orphan_container_removed", lang, name=name), "success")
     except ynh_manager.DockerConnectorError as e:
         flash(str(e), "error")
+    except Exception as e:
+        flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
     return redirect(url_for("audit"))
 
 
@@ -328,6 +350,8 @@ def audit_remove_volume(name):
         flash(i18n.t("flash_orphan_volume_removed", lang, name=name), "success")
     except ynh_manager.DockerConnectorError as e:
         flash(str(e), "error")
+    except Exception as e:
+        flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
     return redirect(url_for("audit"))
 
 

@@ -19,9 +19,12 @@ la requête HTTP d'origine, voir app.py) : la langue de l'utilisateur est
 capturée avant le lancement du thread, jamais déduite après coup.
 """
 import json
+import os
 import re
 import shlex
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 import docker
@@ -47,16 +50,45 @@ class DockerConnectorError(Exception):
 
 
 def _load_state():
+    """Audit chantier 5 (17/07/2026, cas limites) : avant ce correctif, un
+    `data/apps.json` corrompu (écriture interrompue par un disque plein, un
+    crash, ou une édition manuelle ratée) faisait planter TOUTE l'interface
+    (chaque route appelle cette fonction). Un fichier illisible est
+    maintenant mis de côté (jamais supprimé — conservé pour investigation/
+    récupération manuelle) et remplacé par un état vide, pour que l'app
+    reste utilisable plutôt que totalement indisponible."""
     if not DATA_FILE.exists():
         return []
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        corrupted_path = DATA_FILE.with_name(f"{DATA_FILE.name}.corrupted-{int(time.time())}")
+        try:
+            DATA_FILE.rename(corrupted_path)
+        except OSError:
+            pass
+        return []
 
 
 def _save_state(apps):
+    """Écriture atomique (audit chantier 5, 17/07/2026) : écrit dans un
+    fichier temporaire puis `os.replace()` (renommage atomique sur un même
+    système de fichiers) plutôt que d'écrire directement dans `apps.json` —
+    une interruption en cours d'écriture (crash, disque plein) ne peut plus
+    laisser un fichier à moitié écrit et donc invalide pour `_load_state()`."""
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(apps, f, indent=2, ensure_ascii=False)
+    fd, tmp_path = tempfile.mkstemp(dir=DATA_FILE.parent, prefix=".apps-", suffix=".json.tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(apps, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, DATA_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def list_apps():
@@ -705,6 +737,17 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     try:
         docker_client.containers.run(image, **run_kwargs)
     except docker.errors.APIError as e:
+        # Audit chantier 5 (17/07/2026) : le volume a pu être créé juste
+        # au-dessus (data_path renseigné) — avant ce correctif, un échec ICI
+        # laissait ce volume orphelin sans aucune tentative de nettoyage,
+        # alors que le même volume est nettoyé plus bas si c'est l'étape
+        # d'exposition qui échoue à la place. Incohérence corrigée : même
+        # geste défensif qu'à l'exposition, pour un échec sur cette étape.
+        if volume_name:
+            try:
+                docker_client.volumes.get(volume_name).remove()
+            except docker.errors.NotFound:
+                pass
         raise DockerConnectorError(t("err_run_container", lang, error=e))
 
     # --- Exposition via l'app officielle "redirect" ---
