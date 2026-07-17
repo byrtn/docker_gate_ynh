@@ -13,7 +13,22 @@ Deux modes d'exposition :
 - **Dans un répertoire** (`domaine.tld/chemin`) — cas le plus courant, partage un domaine existant.
 - **Sur un sous-domaine dédié** (`sous-domaine.domaine.tld`) — nécessaire pour les interfaces qui ne fonctionnent pas sous un sous-chemin (SPA type Portainer).
 
-Chaque app peut avoir des données persistantes (volume Docker nommé, créé automatiquement si un chemin de données est renseigné) et être publique ou restreinte aux admins.
+Chaque app peut avoir des données persistantes (volume Docker nommé, créé automatiquement si un chemin de données est renseigné) et son accès réglé sur l'un des 3 groupes natifs YunoHost : administrateurs uniquement, tous les comptes YunoHost, ou public.
+
+## ⚠️ Important — que se passe-t-il si tu désinstalles/réinstalles Docker Gate alors que des apps existent encore ?
+
+**Les apps Docker que tu as créées via Docker Gate NE SONT PAS supprimées** si tu désinstalles Docker Gate lui-même (que ce soit volontairement ou lors d'une réinstallation à froid) — leur conteneur Docker, leur exposition YunoHost (app "redirect", conf nginx, permission SSO) restent parfaitement intacts et fonctionnels, complètement indépendants de Docker Gate.
+
+**Mais Docker Gate, lui, perd la mémoire de ces apps.** Sa page d'accueil affichera "Aucune app installée" même si des conteneurs qu'il a créés tournent toujours en arrière-plan — un vrai résidu **du point de vue de Docker Gate uniquement**, pas une panne des apps elles-mêmes.
+
+**Comment les retrouver** : ouvre la page **Audit & nettoyage** de Docker Gate après une réinstallation — les conteneurs Docker nommés `docker-gate-<slug>` qui ne sont plus dans son fichier d'état apparaissent comme "conteneurs orphelins", détectables et supprimables (un par un) depuis cette page.
+
+**Point de vigilance si tu supprimes un conteneur orphelin détecté ainsi** : ça arrête le conteneur, mais l'app YunoHost "redirect" correspondante (sa tuile sur le portail, sa conf nginx) reste en place, pointant alors vers un service arrêté (elle affichera une erreur au clic). Pour un nettoyage complet, retire aussi cette app depuis **Applications** dans le panneau d'administration YunoHost.
+
+**Question posée à la désinstallation (depuis le 17/07/2026)** : si tu désinstalles Docker Gate en ligne de commande (`yunohost app remove docker_gate`) alors que des apps sont encore trackées, une question s'affiche directement dans le terminal :
+> *"Souhaitez-vous également supprimer les applications ET leurs données gérées par Docker Gate ? Réponds explicitement 'oui' ou 'non' :"*
+
+Une réponse **explicite** est exigée — un simple Entrée ou toute autre saisie reboucle sur la question ("Réponse non reconnue") au lieu de choisir silencieusement à ta place. Répondre **oui** supprime réellement chaque app (conteneur Docker, volume de données, exposition YunoHost, domaine dédié éventuel) avant de continuer la désinstallation de Docker Gate — un vrai nettoyage complet en une seule fois. Répondre **non** laisse les apps intactes, exactement comme décrit ci-dessus (à retrouver via `/audit` après une éventuelle réinstallation). Cette question ne s'affiche que si un vrai terminal est utilisé (jamais lors d'une suppression automatisée/API — dans ce cas, comportement par défaut le plus prudent : rien n'est touché).
 
 <details>
 <summary><strong>Ce que Docker Gate NE fait PAS</strong></summary>
@@ -39,6 +54,7 @@ Chaque app peut avoir des données persistantes (volume Docker nommé, créé au
 - **Exposition** : chaque app Docker est exposée via l'app YunoHost officielle "redirect" en mode reverse-proxy vers `127.0.0.1:<port>` — c'est donc SSOwat et nginx (le mécanisme standard YunoHost) qui gèrent l'authentification et le TLS, pas Docker Gate lui-même.
 - **Suppression** : se fait en 3 couches vérifiées séparément (permission SSO + conf nginx, conteneur Docker, entrée d'état) — chaque étape est tentée indépendamment ; un échec sur une étape n'empêche jamais les suivantes, et l'entrée est toujours retirée de l'état à la fin (un résidu réel reste détectable via la page Audit plutôt que de bloquer indéfiniment).
 - **Audit & nettoyage** : détecte les conteneurs/volumes/images/domaines laissés par un essai interrompu. Les volumes ne sont jamais supprimés en masse (peuvent contenir de vraies données) — un par un, sur confirmation explicite.
+- **Suppression de Docker Gate lui-même** (pas d'une app enfant) : voir l'encadré "⚠️ Important" en tête de ce document — un avertissement s'affiche si des apps sont encore trackées, mais il n'empêche pas la suppression de continuer (limitation du cœur YunoHost, pas de ce paquet).
 - **Sécurité applicative** : jeton CSRF (session signée Flask) sur toutes les actions qui modifient un état réel ; clé de session générée aléatoirement à l'installation (jamais codée en dur dans le code source).
 
 </details>

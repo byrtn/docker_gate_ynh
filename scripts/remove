@@ -4,17 +4,100 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 #=================================================
-# GARDE-FOU : refuser la suppression si des apps enfants existent encore
+# AVERTISSEMENT (non-bloquant) : apps enfants encore trackées
 #=================================================
-# Étape 2 (11/07/2026) : Docker Gate peut créer des apps Docker
-# exposées via l'app "redirect". Les supprimer silencieusement en même
-# temps que Docker Gate serait dangereux (perte de service surprise).
-# On préfère bloquer et demander à l'utilisateur de les retirer une par une
-# depuis l'interface avant de continuer.
+# Étape 2 (11/07/2026), corrigé le 17/07/2026 (audit sécurité/qualité,
+# docs/02-wappos/audits/2026-07-17-audit-cycle-backup-restore.md) : un
+# `ynh_die` ici avait auparavant la prétention de bloquer complètement la
+# suppression. FAUX EN PRATIQUE — vérifié par un test réel de bout en bout
+# le 17/07/2026 : le cœur de YunoHost déprovisionne quand même les
+# ressources déclarées dans manifest.toml (ports, permission SSO,
+# install_dir, utilisateur système) APRÈS l'échec de ce script, qu'on le
+# veuille ou non — un `ynh_die` ici ne fait qu'empêcher CE script de finir
+# proprement son propre nettoyage (nginx/systemd/sudoers), laissant des
+# fichiers résiduels orphelins en plus, sans rien empêcher réellement.
+#
+# Décision retenue : avertir honnêtement plutôt que promettre une garantie
+# techniquement impossible à tenir, et laisser la suppression aller à son
+# terme proprement (pas de résidu nginx/systemd/sudoers). Bonne nouvelle
+# confirmée par le même test : les apps enfants elles-mêmes (l'app YunoHost
+# "redirect", son conteneur Docker, sa conf nginx) ne sont PAS affectées —
+# seule la mémoire que Docker Gate en avait (`data/apps.json`) est perdue.
+# Une réinstallation de Docker Gate détecte alors ces conteneurs comme
+# résidus orphelins via la page /audit (testé et confirmé).
 data_file="$install_dir/data/apps.json"
 if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')" -gt 0 ]; then
-    ynh_print_warn --message="Des apps Docker créées via Docker Gate existent encore ($data_file). Supprime-les d'abord depuis l'interface (bouton 'Supprimer' de chaque app) avant de désinstaller Docker Gate, sinon leurs conteneurs Docker resteront orphelins et leur exposition YunoHost restera en place."
-    ynh_die --message="Suppression annulée par sécurité : des apps enfants existent encore. Voir le message ci-dessus."
+    app_count="$(python3 -c "import json; print(len(json.load(open('$data_file'))))" 2>/dev/null || echo '?')"
+
+    # Question interactive (17/07/2026, demandée explicitement par Patrick
+    # suite à la découverte du 17/07 sur ce même chantier) : plutôt que de
+    # laisser silencieusement les apps enfants devenir orphelines, on
+    # propose explicitement de les supprimer AVEC leurs données en même
+    # temps que Docker Gate. Protégé par `[ -t 0 ]` (uniquement si un vrai
+    # terminal est attaché, comme pour les questions d'installation du
+    # manifeste) — jamais de `read` bloquant lors d'un appel non-interactif
+    # (API, script), qui garde alors le comportement prudent par défaut
+    # (rien n'est touché, juste un avertissement).
+    remove_children=0
+    if [ -t 0 ]; then
+        # Important (trouvé le 17/07/2026 en conditions réelles) : `read -p`
+        # écrit son texte de prompt sur un canal que l'affichage YunoHost
+        # (moulinette) ne montre PAS de façon fiable — la question était
+        # invisible pour l'admin, qui ne voyait qu'un silence avant de devoir
+        # deviner qu'il fallait taper une réponse. Corrigé en imprimant la
+        # question via `ynh_print_warn` (même canal, même style "Attention :"
+        # que le reste des messages déjà visibles), puis un `read` SANS son
+        # propre prompt, qui se contente de récupérer la ligne tapée.
+        ynh_print_warn --message="Des apps Docker créées via Docker Gate existent encore ($app_count)."
+        # Réponse EXPLICITE exigée (demandé par Patrick le 17/07/2026) — un
+        # Entrée seul ou une réponse non reconnue reboucle sur la question
+        # au lieu de choisir silencieusement "non" à la place de l'admin.
+        answer=""
+        while true; do
+            ynh_print_warn --message="Souhaitez-vous également supprimer les applications ET leurs données gérées par Docker Gate ? Réponds explicitement 'oui' ou 'non' :"
+            read -r answer
+            case "$answer" in
+                [oO][uU][iI]|[yY][eE][sS])
+                    remove_children=1
+                    break
+                    ;;
+                [nN][oO][nN]|[nN][oO])
+                    remove_children=0
+                    break
+                    ;;
+                *)
+                    ynh_print_warn --message="Réponse non reconnue ('$answer') — tape uniquement 'oui' ou 'non', rien d'autre."
+                    ;;
+            esac
+        done
+    else
+        ynh_print_warn --message="Des apps Docker créées via Docker Gate existent encore ($app_count) — suppression non-interactive, elles ne sont PAS supprimées automatiquement par sécurité."
+    fi
+
+    if [ "$remove_children" -eq 1 ]; then
+        ynh_script_progression --message="Suppression des $app_count app(s) gérées par Docker Gate (avec leurs données)..." --weight=15
+        # Réutilise directement remove_docker_app() (même logique à 3
+        # couches, mêmes vérifications que la suppression via l'interface
+        # web) plutôt que de réimplémenter la suppression en bash — une
+        # seule source de vérité pour "comment on supprime une app".
+        "$venv_dir/bin/python3" - <<PYEOF
+import sys
+sys.path.insert(0, "$install_dir")
+import ynh_manager
+
+apps = ynh_manager._load_state()
+for entry in list(apps):
+    slug = entry.get("slug", "?")
+    try:
+        warnings = ynh_manager.remove_docker_app(slug, "fr", delete_data=True, delete_domain=True)
+        status = "supprimée" if not warnings else f"supprimée avec avertissement(s) : {'; '.join(warnings)}"
+        print(f"  - {slug} : {status}")
+    except Exception as e:
+        print(f"  - {slug} : ECHEC ({e})")
+PYEOF
+    else
+        ynh_print_warn --message="Les apps ne seront PAS touchées : leurs conteneurs Docker et leur exposition YunoHost restent en place, mais Docker Gate perdra leur suivi. Après une éventuelle réinstallation, retrouve-les via la page 'Audit & nettoyage' (conteneurs orphelins). Pour les supprimer plus tard, utilise le bouton 'Supprimer' de chaque app depuis l'interface."
+    fi
 fi
 
 ynh_script_progression --message="Arrêt et suppression du service..." --weight=10
