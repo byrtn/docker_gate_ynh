@@ -30,6 +30,8 @@ Chaque app peut avoir des données persistantes (volume Docker nommé, créé au
 
 Une réponse **explicite** est exigée — un simple Entrée ou toute autre saisie reboucle sur la question ("Réponse non reconnue") au lieu de choisir silencieusement à ta place. Répondre **oui** supprime réellement chaque app (conteneur Docker, volume de données, exposition YunoHost, domaine dédié éventuel) avant de continuer la désinstallation de Docker Gate — un vrai nettoyage complet en une seule fois. Répondre **non** laisse les apps intactes, exactement comme décrit ci-dessus (à retrouver via `/audit` après une éventuelle réinstallation). Cette question ne s'affiche que si un vrai terminal est utilisé (jamais lors d'une suppression automatisée/API — dans ce cas, comportement par défaut le plus prudent : rien n'est touché).
 
+**Seconde question posée à la désinstallation (depuis le 18/07/2026)** : juste après celle ci-dessus, si Docker CE est installé sur la machine, une seconde question propose de le désinstaller aussi complètement (paquets `docker-ce`/`containerd.io`/etc., `/var/lib/docker`, groupe système `docker`) — symétrique au fait que Docker Gate l'installe automatiquement à la première installation. **Si au moins un conteneur Docker non géré par Docker Gate tourne encore sur la machine** (ex : quelque chose lancé manuellement en dehors de l'app), un avertissement explicite le signale avant la question — le purger avec Docker CE le détruirait aussi, sans rapport avec Docker Gate. Même mécanique que la première question : réponse explicite exigée, jamais bloquant hors terminal réel (Docker CE reste alors installé par défaut, comportement le plus prudent).
+
 <details>
 <summary><strong>Ce que Docker Gate NE fait PAS</strong></summary>
 

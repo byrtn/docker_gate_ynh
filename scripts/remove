@@ -130,6 +130,105 @@ PYEOF
     fi
 fi
 
+#=================================================
+# QUESTION INTERACTIVE : désinstaller aussi Docker CE ?
+#=================================================
+# Ajout du 18/07/2026 (demande de Patrick pendant le grand test de
+# réinstallation à froid) : Docker Gate installe Docker CE automatiquement
+# à l'installation (voir ynh_docker_gate__ensure_docker_installed dans
+# _common.sh) — de façon symétrique, propose de le désinstaller aussi ici
+# plutôt que de le laisser systématiquement en place. Même protection
+# `[ -t 0 ]` que la question ci-dessus, jamais bloquant en appel
+# non-interactif (défaut prudent : Docker CE n'est jamais touché sans
+# confirmation explicite).
+if command -v docker >/dev/null 2>&1; then
+    lang="$(cat "$install_dir/data/default_language.txt" 2>/dev/null)"
+    [ "$lang" = "fr" ] || lang="en"
+
+    # Recense tout conteneur qui n'est PAS géré par Docker Gate (comparé
+    # aux container_name de data/apps.json) — avertissement renforcé s'il y
+    # en a, car purger Docker CE les détruira aussi, sans rapport avec
+    # cette app (ex : un conteneur lancé manuellement en dehors de Docker
+    # Gate, comme Portainer l'a longtemps été historiquement — voir
+    # DEC-025/027).
+    tracked_names=""
+    if [ -f "$data_file" ]; then
+        tracked_names="$("$venv_dir/bin/python3" -c "
+import json
+try:
+    apps = json.load(open('$data_file'))
+    print(' '.join(a.get('container_name', '') for a in apps))
+except Exception:
+    pass
+" 2>/dev/null)"
+    fi
+    foreign_containers=""
+    for c in $(docker ps -aq --format '{{.Names}}' 2>/dev/null); do
+        case " $tracked_names " in
+            *" $c "*) ;;
+            *) foreign_containers="$foreign_containers $c" ;;
+        esac
+    done
+    foreign_containers="${foreign_containers# }"
+
+    if [ "$lang" = "fr" ]; then
+        docker_question="Voulez-vous également désinstaller Docker CE (paquets, /var/lib/docker, groupe docker) ? Docker Gate l'avait installé automatiquement. Réponds explicitement 'oui' ou 'non' :"
+        docker_foreign_warn="ATTENTION : au moins un conteneur Docker non géré par Docker Gate tourne encore sur cette machine ($foreign_containers) — le purger avec Docker CE le détruira AUSSI, données comprises, sans rapport avec cette app."
+        docker_noninteractive="Docker CE reste installé (suppression non-interactive, jamais touché sans confirmation explicite)."
+        docker_progress="Désinstallation complète de Docker CE..."
+        docker_kept="Docker CE reste installé sur cette machine."
+        unrec_prefix="Réponse non reconnue"
+        unrec_suffix="— tape uniquement 'oui' ou 'non', rien d'autre."
+    else
+        docker_question="Do you also want to uninstall Docker CE (packages, /var/lib/docker, docker group)? Docker Gate installed it automatically. Answer explicitly 'yes' or 'no':"
+        docker_foreign_warn="WARNING: at least one Docker container not managed by Docker Gate is still running on this machine ($foreign_containers) — purging it along with Docker CE will ALSO destroy it, data included, unrelated to this app."
+        docker_noninteractive="Docker CE is left installed (non-interactive removal, never touched without explicit confirmation)."
+        docker_progress="Fully uninstalling Docker CE..."
+        docker_kept="Docker CE remains installed on this machine."
+        unrec_prefix="Unrecognized answer"
+        unrec_suffix="— type only 'yes' or 'no', nothing else."
+    fi
+
+    remove_docker=0
+    if [ -t 0 ]; then
+        if [ -n "$foreign_containers" ]; then
+            ynh_print_warn --message="$docker_foreign_warn"
+        fi
+        answer=""
+        while true; do
+            ynh_print_warn --message="$docker_question"
+            read -r answer
+            case "$answer" in
+                [oO][uU][iI]|[yY][eE][sS])
+                    remove_docker=1
+                    break
+                    ;;
+                [nN][oO][nN]|[nN][oO])
+                    remove_docker=0
+                    break
+                    ;;
+                *)
+                    ynh_print_warn --message="$unrec_prefix ('$answer') $unrec_suffix"
+                    ;;
+            esac
+        done
+    else
+        ynh_print_warn --message="$docker_noninteractive"
+    fi
+
+    if [ "$remove_docker" -eq 1 ]; then
+        ynh_script_progression --message="$docker_progress" --weight=15
+        systemctl stop docker docker.socket containerd 2>/dev/null || true
+        apt-get purge -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin containerd.io >/dev/null 2>&1 || true
+        apt-get autoremove -y >/dev/null 2>&1 || true
+        rm -rf /var/lib/docker /var/lib/containerd /etc/docker
+        rm -f /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.gpg
+        groupdel docker 2>/dev/null || true
+    else
+        ynh_print_warn --message="$docker_kept"
+    fi
+fi
+
 ynh_script_progression --message="Arrêt et suppression du service..." --weight=10
 
 if yunohost service status "$app" >/dev/null 2>&1; then

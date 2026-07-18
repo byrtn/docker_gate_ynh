@@ -7,6 +7,17 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.4~ynh1] — 2026-07-18
+
+### Added
+- `scripts/remove` now also asks (interactively, real terminal only) whether
+  to fully uninstall Docker CE itself — symmetric to Docker Gate installing
+  it automatically on first install. Warns explicitly if a Docker container
+  not managed by Docker Gate is still running, since purging Docker CE would
+  destroy it too, unrelated to this app. Same explicit yes/no mechanics as
+  the existing child-apps removal question; never blocks outside a real
+  terminal (Docker CE left installed by default in that case).
+
 ## [1.3~ynh1] — 2026-07-18
 
 ### Fixed

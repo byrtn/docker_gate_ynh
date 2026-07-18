@@ -30,6 +30,8 @@ Each app can have persistent data (a named Docker volume, created automatically 
 
 An **explicit** answer is required — a bare Enter or any other input loops back to the question ("Unrecognized answer") instead of silently choosing for you. Answering **yes** actually removes each app (Docker container, data volume, YunoHost exposure, dedicated domain if any) before continuing to uninstall Docker Gate itself — a genuine full cleanup in one go. Answering **no** leaves the apps untouched, exactly as described above (findable via `/audit` after a later reinstall). This question is only shown when a real terminal is attached (never during an automated/API removal — in that case, the safest default applies: nothing is touched).
 
+**Second question asked at uninstall time (since 2026-07-18)**: right after the one above, if Docker CE is installed on the machine, a second question offers to fully uninstall it too (`docker-ce`/`containerd.io`/etc. packages, `/var/lib/docker`, the system `docker` group) — symmetric to the fact that Docker Gate installs it automatically on first install. **If at least one Docker container not managed by Docker Gate is still running on the machine** (e.g. something started manually outside the app), an explicit warning is shown before the question — purging it along with Docker CE would destroy it too, unrelated to Docker Gate. Same mechanics as the first question: an explicit answer is required, never blocking outside a real terminal (Docker CE is then left installed by default, the safest behavior).
+
 <details>
 <summary><strong>What Docker Gate does NOT do</strong></summary>
 
