@@ -12,7 +12,7 @@ ExecStart=__INSTALL_DIR__/venv/bin/gunicorn --workers 1 --bind 127.0.0.1:__PORT_
 Restart=on-failure
 RestartSec=5
 
-# Durcissement de base
+# Basic hardening
 PrivateTmp=true
 
 [Install]

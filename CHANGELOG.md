@@ -7,6 +7,20 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.6~ynh4] — 2026-07-18
+
+### Fixed
+- One more French comment (`# Durcissement de base`, no accented
+  characters so it slipped past the earlier translation pass's grep) in
+  `conf/systemd.service`, translated to English.
+- `README.md`'s "testing branch" section (from the standard
+  `readme_generator` template) linked to a `testing` branch that doesn't
+  exist in this repo (single-branch `main` workflow) — a genuinely dead
+  link (verified 404), removed rather than fabricating an unused branch
+  just to make it resolve. Found during a full review of the published
+  GitHub repo, requested by Patrick after catching the version badge issue
+  above.
+
 ## [1.6~ynh3] — 2026-07-18
 
 ### Fixed
