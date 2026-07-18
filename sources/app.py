@@ -42,7 +42,7 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 an
 # même temps que `version` dans manifest.toml (partie avant `~ynh`), pas
 # lue dynamiquement pour éviter une dépendance de parsing au manifeste au
 # runtime pour un simple affichage.
-APP_VERSION = "1.5"
+APP_VERSION = "1.6"
 
 app = Flask(__name__)
 
@@ -328,7 +328,7 @@ def audit():
     orphan_volumes = _safe(ynh_manager.find_orphan_volumes)
     dangling_images = _safe(ynh_manager.find_dangling_images)
     empty_domains = _safe(ynh_manager.find_empty_domains, lang)
-    docker_ce = _safe(ynh_manager.docker_ce_status) or {"installed": False, "foreign_containers": []}
+    docker_ce = _safe(ynh_manager.docker_ce_status) or {"installed": False, "tracked_containers": [], "foreign_containers": []}
     return render_template(
         "audit.html",
         orphan_containers=orphan_containers,

@@ -7,6 +7,30 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.6~ynh1] — 2026-07-18
+
+### Fixed
+- Both the "Uninstall Docker CE" button (Audit page) and the interactive
+  question in `scripts/remove` only warned about containers *not* managed
+  by Docker Gate before offering to purge Docker CE — giving a false sense
+  of safety whenever no such foreign container existed. In reality, purging
+  Docker CE stops and destroys every container equally, including apps
+  still tracked and kept on purpose (e.g. Portainer, kept when answering
+  "no" to the child-apps removal question). Found by Patrick during a live
+  GUI-based removal test: he correctly pointed out that removing Docker
+  Gate without also removing Docker CE leaves child apps running and
+  functional, but removing Docker CE afterwards (or in the same operation)
+  would silently break them with no warning at all. Both warnings now cover
+  all running containers, clearly distinguishing "still managed by Docker
+  Gate" from "unrelated to Docker Gate".
+- `scripts/remove`'s non-interactive messages (shown when Docker Gate is
+  removed from the YunoHost admin panel — no terminal attached, so none of
+  the interactive questions can ever appear) now explicitly explain the
+  consequence and the correct order of operations: if Docker CE is also
+  meant to be uninstalled, do it from the Audit page's "Uninstall Docker
+  CE" button *before* removing Docker Gate itself — once Docker Gate is
+  gone, that button (and any further warning about it) disappears with it.
+
 ## [1.5~ynh1] — 2026-07-18
 
 ### Added

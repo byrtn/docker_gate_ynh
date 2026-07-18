@@ -46,17 +46,17 @@ if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')"
         msg_question="Souhaitez-vous également supprimer les applications ET leurs données gérées par Docker Gate ? Réponds explicitement 'oui' ou 'non' :"
         msg_unrecognized_prefix="Réponse non reconnue"
         msg_unrecognized_suffix="— tape uniquement 'oui' ou 'non', rien d'autre."
-        msg_noninteractive="Des apps Docker créées via Docker Gate existent encore ($app_count) — suppression non-interactive, elles ne sont PAS supprimées automatiquement par sécurité."
+        msg_noninteractive="Des apps Docker créées via Docker Gate existent encore ($app_count) — suppression non-interactive, elles ne sont PAS supprimées automatiquement par sécurité. Elles continueront de tourner et de consommer Docker CE : si tu comptes aussi désinstaller Docker CE plus tard, fais-le AVANT de supprimer Docker Gate (bouton 'Désinstaller Docker CE' de la page Audit), sinon plus aucun avertissement ne sera possible une fois Docker Gate parti."
         msg_progress="Suppression des $app_count app(s) gérées par Docker Gate (avec leurs données)..."
-        msg_kept="Les apps ne seront PAS touchées : leurs conteneurs Docker et leur exposition YunoHost restent en place, mais Docker Gate perdra leur suivi. Après une éventuelle réinstallation, retrouve-les via la page 'Audit & nettoyage' (conteneurs orphelins). Pour les supprimer plus tard, utilise le bouton 'Supprimer' de chaque app depuis l'interface."
+        msg_kept="Les apps ne seront PAS touchées : leurs conteneurs Docker et leur exposition YunoHost restent en place, mais Docker Gate perdra leur suivi. Après une éventuelle réinstallation, retrouve-les via la page 'Audit & nettoyage' (conteneurs orphelins). Pour les supprimer plus tard, utilise le bouton 'Supprimer' de chaque app depuis l'interface. ATTENTION : ces apps ont toujours besoin de Docker CE pour fonctionner — si tu prévois de désinstaller Docker CE (question suivante ou plus tard), ces apps cesseront de fonctionner tant que Docker CE n'est pas réinstallé."
     else
         msg_children_exist="Docker apps created via Docker Gate still exist ($app_count)."
         msg_question="Do you also want to remove the applications AND their data managed by Docker Gate? Answer explicitly 'yes' or 'no':"
         msg_unrecognized_prefix="Unrecognized answer"
         msg_unrecognized_suffix="— type only 'yes' or 'no', nothing else."
-        msg_noninteractive="Docker apps created via Docker Gate still exist ($app_count) — non-interactive removal, they are NOT automatically deleted for safety."
+        msg_noninteractive="Docker apps created via Docker Gate still exist ($app_count) — non-interactive removal, they are NOT automatically deleted for safety. They will keep running and keep relying on Docker CE: if you also plan to uninstall Docker CE later, do it BEFORE removing Docker Gate (the 'Uninstall Docker CE' button on the Audit page), otherwise no further warning will be possible once Docker Gate is gone."
         msg_progress="Removing $app_count app(s) managed by Docker Gate (with their data)..."
-        msg_kept="The apps will NOT be touched: their Docker containers and YunoHost exposure remain in place, but Docker Gate will lose track of them. After a later reinstall, find them again via the 'Audit & cleanup' page (orphan containers). To remove them later, use the 'Delete' button on each app from the interface."
+        msg_kept="The apps will NOT be touched: their Docker containers and YunoHost exposure remain in place, but Docker Gate will lose track of them. After a later reinstall, find them again via the 'Audit & cleanup' page (orphan containers). To remove them later, use the 'Delete' button on each app from the interface. WARNING: these apps still need Docker CE to work — if you plan to uninstall Docker CE (next question, or later), these apps will stop working until Docker CE is reinstalled."
     fi
 
     # Question interactive (17/07/2026, demandée explicitement par Patrick
@@ -145,12 +145,16 @@ if command -v docker >/dev/null 2>&1; then
     lang="$(cat "$install_dir/data/default_language.txt" 2>/dev/null)"
     [ "$lang" = "fr" ] || lang="en"
 
-    # Recense tout conteneur qui n'est PAS géré par Docker Gate (comparé
-    # aux container_name de data/apps.json) — avertissement renforcé s'il y
-    # en a, car purger Docker CE les détruira aussi, sans rapport avec
-    # cette app (ex : un conteneur lancé manuellement en dehors de Docker
-    # Gate, comme Portainer l'a longtemps été historiquement — voir
-    # DEC-025/027).
+    # Recense les conteneurs encore présents à cet instant, répartis en deux
+    # catégories : ceux encore gérés par Docker Gate (container_name connu
+    # de data/apps.json — présents si l'admin a choisi de les garder
+    # ci-dessus, ou en appel non-interactif) et les autres, totalement
+    # étrangers à Docker Gate. Purger Docker CE détruit LES DEUX catégories
+    # sans distinction — avertir seulement sur les "étrangers" aurait donné
+    # un faux sentiment de sécurité tant qu'aucune app tierce n'est
+    # présente, alors que les apps encore gérées (ex : Portainer conservé
+    # ci-dessus) cesseraient tout autant de fonctionner (point soulevé par
+    # Patrick le 18/07/2026 après un test réel de bout en bout).
     tracked_names=""
     if [ -f "$data_file" ]; then
         tracked_names="$("$venv_dir/bin/python3" -c "
@@ -162,17 +166,20 @@ except Exception:
     pass
 " 2>/dev/null)"
     fi
+    tracked_containers=""
     foreign_containers=""
     for c in $(docker ps -aq --format '{{.Names}}' 2>/dev/null); do
         case " $tracked_names " in
-            *" $c "*) ;;
+            *" $c "*) tracked_containers="$tracked_containers $c" ;;
             *) foreign_containers="$foreign_containers $c" ;;
         esac
     done
+    tracked_containers="${tracked_containers# }"
     foreign_containers="${foreign_containers# }"
 
     if [ "$lang" = "fr" ]; then
         docker_question="Voulez-vous également désinstaller Docker CE (paquets, /var/lib/docker, groupe docker) ? Docker Gate l'avait installé automatiquement. Réponds explicitement 'oui' ou 'non' :"
+        docker_tracked_warn="ATTENTION : $tracked_containers tourne(nt) encore et sont géré(s) par Docker Gate (que tu as choisi de garder) — le(s) arrêter avec Docker CE les rendra inutilisables tant que Docker CE n'est pas réinstallé."
         docker_foreign_warn="ATTENTION : au moins un conteneur Docker non géré par Docker Gate tourne encore sur cette machine ($foreign_containers) — le purger avec Docker CE le détruira AUSSI, données comprises, sans rapport avec cette app."
         docker_noninteractive="Docker CE reste installé (suppression non-interactive, jamais touché sans confirmation explicite)."
         docker_progress="Désinstallation complète de Docker CE..."
@@ -181,6 +188,7 @@ except Exception:
         unrec_suffix="— tape uniquement 'oui' ou 'non', rien d'autre."
     else
         docker_question="Do you also want to uninstall Docker CE (packages, /var/lib/docker, docker group)? Docker Gate installed it automatically. Answer explicitly 'yes' or 'no':"
+        docker_tracked_warn="WARNING: $tracked_containers is/are still running and managed by Docker Gate (which you chose to keep) — stopping it/them along with Docker CE will make it/them unusable until Docker CE is reinstalled."
         docker_foreign_warn="WARNING: at least one Docker container not managed by Docker Gate is still running on this machine ($foreign_containers) — purging it along with Docker CE will ALSO destroy it, data included, unrelated to this app."
         docker_noninteractive="Docker CE is left installed (non-interactive removal, never touched without explicit confirmation)."
         docker_progress="Fully uninstalling Docker CE..."
@@ -191,6 +199,9 @@ except Exception:
 
     remove_docker=0
     if [ -t 0 ]; then
+        if [ -n "$tracked_containers" ]; then
+            ynh_print_warn --message="$docker_tracked_warn"
+        fi
         if [ -n "$foreign_containers" ]; then
             ynh_print_warn --message="$docker_foreign_warn"
         fi

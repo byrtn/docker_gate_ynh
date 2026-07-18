@@ -462,6 +462,18 @@ STRINGS = {
     "h2_docker_ce": {"en": "Docker CE (the server's Docker engine)", "fr": "Docker CE (le moteur Docker du serveur)"},
     "docker_ce_installed": {"en": "Installed on this server.", "fr": "Installé sur ce serveur."},
     "docker_ce_not_installed": {"en": "Not installed on this server.", "fr": "Non installé sur ce serveur."},
+    "docker_ce_tracked_warning": {
+        "en": (
+            "⚠️ {count} app(s) managed by Docker Gate are still running on this server ({names}) — "
+            "uninstalling Docker CE will stop them too, and they won't work again until Docker CE is "
+            "reinstalled. Consider removing these apps first if you don't want to keep them."
+        ),
+        "fr": (
+            "⚠️ {count} app(s) gérées par Docker Gate tournent encore sur ce serveur ({names}) — "
+            "désinstaller Docker CE les arrêtera aussi, et elles ne fonctionneront plus tant que Docker "
+            "CE n'est pas réinstallé. Envisage de supprimer ces apps d'abord si tu ne comptes pas les garder."
+        ),
+    },
     "docker_ce_foreign_warning": {
         "en": (
             "⚠️ {count} container(s) not managed by Docker Gate are still present on this server "

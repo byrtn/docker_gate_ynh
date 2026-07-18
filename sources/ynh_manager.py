@@ -1076,23 +1076,32 @@ def find_empty_domains(lang):
 # le mode de suppression choisi pour Docker Gate lui-même.
 
 def docker_ce_status():
-    """État actuel de Docker CE sur la machine : installé ou non, et liste
-    des conteneurs qui ne sont PAS gérés par Docker Gate (pour avertir avant
-    une purge qui les détruirait aussi, sans rapport avec cette app)."""
+    """État actuel de Docker CE sur la machine : installé ou non, conteneurs
+    gérés par Docker Gate toujours présents (que ce bouton arrêterait aussi
+    — pas seulement les conteneurs "étrangers") et conteneurs qui ne sont
+    PAS gérés par Docker Gate. Purger Docker CE détruit les deux catégories
+    sans distinction : un avertissement limité aux seuls conteneurs
+    étrangers aurait donné un faux sentiment de sécurité tant qu'aucune app
+    tierce n'est présente, alors que les apps gérées par Docker Gate
+    elles-mêmes (ex : Portainer) cesseraient tout autant de fonctionner
+    (point soulevé par Patrick le 18/07/2026 après un test réel)."""
     installed = shutil.which("docker") is not None
+    tracked = []
     foreign = []
     if installed:
         known_names = {a["container_name"] for a in _load_state()}
         try:
             for c in docker_client.containers.list(all=True):
-                if c.name not in known_names:
+                if c.name in known_names:
+                    tracked.append(c.name)
+                else:
                     foreign.append(c.name)
         except docker.errors.DockerException:
             # Docker installé mais démon injoignable (peu probable, mais ne
             # doit jamais faire planter la page Audit) — on affiche l'état
             # "installé" sans pouvoir lister les conteneurs dans ce cas.
             pass
-    return {"installed": installed, "foreign_containers": foreign}
+    return {"installed": installed, "tracked_containers": tracked, "foreign_containers": foreign}
 
 
 def uninstall_docker_ce(lang):

@@ -122,6 +122,9 @@
     <span class="dot"></span>
     <div class="info">
       <div class="name">{{ t('docker_ce_installed') }}</div>
+      {% if docker_ce.tracked_containers %}
+        <div class="meta">{{ t('docker_ce_tracked_warning', count=docker_ce.tracked_containers|length, names=docker_ce.tracked_containers|join(', ')) }}</div>
+      {% endif %}
       {% if docker_ce.foreign_containers %}
         <div class="meta">{{ t('docker_ce_foreign_warning', count=docker_ce.foreign_containers|length, names=docker_ce.foreign_containers|join(', ')) }}</div>
       {% endif %}
