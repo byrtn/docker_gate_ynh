@@ -7,6 +7,13 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh6] — 2026-07-18
+
+### Changed
+- "← Back to portal" link repositioned to the left of the EN | FR switcher
+  (grouped together on the right side of the header, small gap between
+  them) instead of centered between logo and language switcher.
+
 ## [0.2~ynh5] — 2026-07-18
 
 ### Added
