@@ -7,6 +7,16 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.6~ynh3] — 2026-07-18
+
+### Fixed
+- `README.md`'s version badge was stuck at "0.2~ynh4" — never updated since
+  the file was first auto-generated, well before the versioning scheme
+  correction (see 1.0~ynh1 below). Found by Patrick while reviewing the
+  published GitHub repo. Corrected to match `manifest.toml`; should go back
+  to being auto-generated via `readme_generator` once the official tooling
+  is used locally.
+
 ## [1.6~ynh2] — 2026-07-18
 
 ### Changed
