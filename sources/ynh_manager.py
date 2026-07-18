@@ -22,6 +22,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
@@ -1061,3 +1062,79 @@ def find_empty_domains(lang):
         if not apps_on_domain and d not in known_apps_domains:
             empty.append(d)
     return empty
+
+
+# =================================================
+# DÉSINSTALLATION COMPLÈTE DE DOCKER CE (18/07/2026)
+# =================================================
+# Symétrique à ynh_docker_gate__ensure_docker_installed (scripts/_common.sh),
+# qui installe Docker CE automatiquement. Exposée ici, en plus de la
+# question posée par scripts/remove, car cette dernière ne peut jamais
+# s'afficher lors d'une désinstallation déclenchée depuis le panneau
+# d'administration YunoHost (pas de terminal attaché à ce moment-là, voir
+# journal du 18/07/2026) — cette page web, elle, fonctionne quel que soit
+# le mode de suppression choisi pour Docker Gate lui-même.
+
+def docker_ce_status():
+    """État actuel de Docker CE sur la machine : installé ou non, et liste
+    des conteneurs qui ne sont PAS gérés par Docker Gate (pour avertir avant
+    une purge qui les détruirait aussi, sans rapport avec cette app)."""
+    installed = shutil.which("docker") is not None
+    foreign = []
+    if installed:
+        known_names = {a["container_name"] for a in _load_state()}
+        try:
+            for c in docker_client.containers.list(all=True):
+                if c.name not in known_names:
+                    foreign.append(c.name)
+        except docker.errors.DockerException:
+            # Docker installé mais démon injoignable (peu probable, mais ne
+            # doit jamais faire planter la page Audit) — on affiche l'état
+            # "installé" sans pouvoir lister les conteneurs dans ce cas.
+            pass
+    return {"installed": installed, "foreign_containers": foreign}
+
+
+def uninstall_docker_ce(lang):
+    """Purge complète de Docker CE (paquets, /var/lib/docker, groupe
+    système docker) — même logique que la question interactive de
+    scripts/remove, exposée ici en action web pour couvrir le cas où
+    Docker Gate est désinstallé depuis le panneau d'administration
+    (aucun terminal attaché, la question de scripts/remove ne peut alors
+    jamais s'afficher). Aucune vérification de sécurité supplémentaire
+    ici sur les conteneurs étrangers : l'avertissement est affiché côté
+    interface (voir docker_ce_status) avant que l'admin ne clique,
+    cohérent avec l'armement à deux clics déjà en place pour les
+    suppressions destructives de cette page."""
+    commands = [
+        (["systemctl", "stop", "docker", "docker.socket", "containerd"], t("err_docker_ce_stop", lang)),
+        (
+            [
+                "apt-get", "purge", "-y",
+                "docker-ce", "docker-ce-cli", "docker-ce-rootless-extras",
+                "docker-buildx-plugin", "docker-compose-plugin", "containerd.io",
+            ],
+            t("err_docker_ce_purge", lang),
+        ),
+        (["apt-get", "autoremove", "-y"], t("err_docker_ce_autoremove", lang)),
+        (["rm", "-rf", "/var/lib/docker", "/var/lib/containerd", "/etc/docker"], t("err_docker_ce_rm", lang)),
+        (
+            ["rm", "-f", "/etc/apt/sources.list.d/docker.list", "/etc/apt/keyrings/docker.gpg"],
+            t("err_docker_ce_rm", lang),
+        ),
+    ]
+    warnings = []
+    for args, error_message in commands:
+        try:
+            _run_sudo(args, error_message, lang)
+        except DockerConnectorError as e:
+            warnings.append(str(e))
+
+    # groupdel échoue si le groupe n'existe déjà plus (ex : deuxième
+    # tentative) — non bloquant, pas un vrai échec dans ce cas précis.
+    try:
+        _run_sudo(["groupdel", "docker"], t("err_docker_ce_groupdel", lang), lang)
+    except DockerConnectorError:
+        pass
+
+    return warnings

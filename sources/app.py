@@ -32,6 +32,7 @@ CSRF_PROTECTED_ENDPOINTS = {
     "audit_remove_container",
     "audit_remove_volume",
     "audit_prune_images",
+    "audit_uninstall_docker_ce",
 }
 
 LANG_COOKIE_NAME = "docker_gate_lang"
@@ -41,7 +42,7 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 an
 # même temps que `version` dans manifest.toml (partie avant `~ynh`), pas
 # lue dynamiquement pour éviter une dépendance de parsing au manifeste au
 # runtime pour un simple affichage.
-APP_VERSION = "1.4"
+APP_VERSION = "1.5"
 
 app = Flask(__name__)
 
@@ -327,13 +328,31 @@ def audit():
     orphan_volumes = _safe(ynh_manager.find_orphan_volumes)
     dangling_images = _safe(ynh_manager.find_dangling_images)
     empty_domains = _safe(ynh_manager.find_empty_domains, lang)
+    docker_ce = _safe(ynh_manager.docker_ce_status) or {"installed": False, "foreign_containers": []}
     return render_template(
         "audit.html",
         orphan_containers=orphan_containers,
         orphan_volumes=orphan_volumes,
         dangling_images=dangling_images,
         empty_domains=empty_domains,
+        docker_ce=docker_ce,
     )
+
+
+@app.route("/audit/uninstall_docker_ce", methods=["POST"])
+def audit_uninstall_docker_ce():
+    lang = get_lang()
+    try:
+        warnings = ynh_manager.uninstall_docker_ce(lang)
+        if warnings:
+            for w in warnings:
+                flash(w, "warning")
+        flash(i18n.t("flash_docker_ce_uninstalled", lang), "success")
+    except ynh_manager.DockerConnectorError as e:
+        flash(str(e), "error")
+    except Exception as e:
+        flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
+    return redirect(url_for("audit"))
 
 
 @app.route("/audit/remove_container/<name>", methods=["POST"])

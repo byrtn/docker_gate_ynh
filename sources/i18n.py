@@ -233,6 +233,26 @@ STRINGS = {
         "en": "This volume isn't recognized as an orphan, removal refused for safety.",
         "fr": "Ce volume n'est pas reconnu comme orphelin, suppression refusée par sécurité.",
     },
+    "err_docker_ce_stop": {
+        "en": "Unable to stop the Docker services.",
+        "fr": "Impossible d'arrêter les services Docker.",
+    },
+    "err_docker_ce_purge": {
+        "en": "Unable to remove the Docker CE packages.",
+        "fr": "Impossible de supprimer les paquets Docker CE.",
+    },
+    "err_docker_ce_autoremove": {
+        "en": "Unable to clean up unused dependencies.",
+        "fr": "Impossible de nettoyer les dépendances devenues inutiles.",
+    },
+    "err_docker_ce_rm": {
+        "en": "Unable to remove some Docker CE files/directories.",
+        "fr": "Impossible de supprimer certains fichiers/répertoires de Docker CE.",
+    },
+    "err_docker_ce_groupdel": {
+        "en": "Unable to remove the 'docker' system group.",
+        "fr": "Impossible de supprimer le groupe système 'docker'.",
+    },
 
     # --- app.py (flash messages) ---
     "flash_app_removed": {"en": "App '{slug}' removed.", "fr": "App '{slug}' supprimée."},
@@ -252,6 +272,10 @@ STRINGS = {
         "fr": "Requête refusée (jeton de sécurité invalide ou expiré) — recharge la page et réessaie.",
     },
     "flash_unexpected_error": {"en": "Unexpected error: {error}", "fr": "Erreur inattendue : {error}"},
+    "flash_docker_ce_uninstalled": {
+        "en": "Docker CE has been fully uninstalled from this server.",
+        "fr": "Docker CE a été entièrement désinstallé de ce serveur.",
+    },
 
     # --- Templates : commun ---
     "btn_confirm": {"en": "Confirm?", "fr": "Confirmer ?"},
@@ -434,6 +458,24 @@ STRINGS = {
     "confirm_delete_orphan_volume": {
         "en": "PERMANENTLY delete the volume {name} and all its data?",
         "fr": "Supprimer DÉFINITIVEMENT le volume {name} et toutes ses données ?",
+    },
+    "h2_docker_ce": {"en": "Docker CE (the server's Docker engine)", "fr": "Docker CE (le moteur Docker du serveur)"},
+    "docker_ce_installed": {"en": "Installed on this server.", "fr": "Installé sur ce serveur."},
+    "docker_ce_not_installed": {"en": "Not installed on this server.", "fr": "Non installé sur ce serveur."},
+    "docker_ce_foreign_warning": {
+        "en": (
+            "⚠️ {count} container(s) not managed by Docker Gate are still present on this server "
+            "({names}) — uninstalling Docker CE will destroy them too, unrelated to Docker Gate."
+        ),
+        "fr": (
+            "⚠️ {count} conteneur(s) non gérés par Docker Gate sont encore présents sur ce serveur "
+            "({names}) — désinstaller Docker CE les détruira aussi, sans rapport avec Docker Gate."
+        ),
+    },
+    "btn_uninstall_docker_ce": {"en": "Uninstall Docker CE", "fr": "Désinstaller Docker CE"},
+    "confirm_uninstall_docker_ce": {
+        "en": "PERMANENTLY uninstall Docker CE (packages, /var/lib/docker, docker group) from this server?",
+        "fr": "Désinstaller DÉFINITIVEMENT Docker CE (paquets, /var/lib/docker, groupe docker) de ce serveur ?",
     },
 
     # --- progress.html ---

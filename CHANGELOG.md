@@ -7,6 +7,19 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.5~ynh1] — 2026-07-18
+
+### Added
+- "Uninstall Docker CE" button on the Audit page (`/audit`): the interactive
+  question in `scripts/remove` (see 1.4~ynh1 below) can never appear when
+  Docker Gate is removed from the YunoHost admin panel instead of the command
+  line — no terminal is attached in that case, so the safest default (leave
+  Docker CE installed) always applies silently. This new button covers that
+  gap: a genuine HTTP action, independent of how Docker Gate itself is
+  removed. Same warning as the terminal question if a Docker container not
+  managed by Docker Gate is still present, and the same two-click confirmation
+  already used elsewhere on this page.
+
 ## [1.4~ynh1] — 2026-07-18
 
 ### Added

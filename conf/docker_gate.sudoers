@@ -48,3 +48,15 @@ __APP__ ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /opt/yunoh
 # l'utilisateur) sur la permission ".main" d'une instance "redirect" créée
 # par cette app — la règle ci-dessous n'autorise plus que ça, exactement.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost user permission update *.main --logo /opt/yunohost/__APP__/static/docker-gate-app-logo.png
+# Désinstallation de Docker CE depuis la page Audit (18/07/2026) : couvre le
+# cas où Docker Gate est désinstallé via le panneau d'administration
+# YunoHost (aucun terminal attaché, la question interactive de
+# scripts/remove ne peut jamais s'afficher dans ce cas — voir
+# ynh_manager.uninstall_docker_ce). Chaque commande est fixe, aucun joker
+# au-delà du strict nécessaire.
+__APP__ ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker docker.socket containerd
+__APP__ ALL=(root) NOPASSWD: /usr/bin/apt-get purge -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin containerd.io
+__APP__ ALL=(root) NOPASSWD: /usr/bin/apt-get autoremove -y
+__APP__ ALL=(root) NOPASSWD: /usr/bin/rm -rf /var/lib/docker /var/lib/containerd /etc/docker
+__APP__ ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.gpg
+__APP__ ALL=(root) NOPASSWD: /usr/sbin/groupdel docker

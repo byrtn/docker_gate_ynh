@@ -115,6 +115,27 @@
   <div class="clean-state">{{ t('no_empty_domains') }}</div>
 {% endif %}
 
+{% if docker_ce.installed %}
+<div class="divider"><div class="line"></div><span>{{ t('h2_docker_ce') }}</span><div class="line red"></div></div>
+<div class="row-list">
+  <div class="row">
+    <span class="dot"></span>
+    <div class="info">
+      <div class="name">{{ t('docker_ce_installed') }}</div>
+      {% if docker_ce.foreign_containers %}
+        <div class="meta">{{ t('docker_ce_foreign_warning', count=docker_ce.foreign_containers|length, names=docker_ce.foreign_containers|join(', ')) }}</div>
+      {% endif %}
+    </div>
+    <span class="tag">Docker CE</span>
+    <form method="post" action="{{ url_for('audit_uninstall_docker_ce') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="del" type="submit"
+              onclick='return armDelete(this, {{ t("confirm_uninstall_docker_ce")|tojson }})'>{{ t('btn_uninstall_docker_ce') }}</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="center" style="margin-top:2rem;">
   <a class="btn" href="{{ url_for('index') }}">{{ t('btn_back') }}</a>
 </div>
