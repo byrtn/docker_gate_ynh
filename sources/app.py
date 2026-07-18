@@ -41,7 +41,7 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # `version` in manifest.toml (the part before `~ynh`), not parsed
 # dynamically to avoid a manifest-parsing dependency at runtime for a
 # simple display.
-APP_VERSION = "1.6"
+APP_VERSION = "1.0.1"
 
 app = Flask(__name__)
 

@@ -7,6 +7,22 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.0.1~ynh1] — 2026-07-18
+
+### Changed
+- Version renumbered from `1.6~ynh4` down to `1.0.1~ynh1`, Patrick's
+  decision right before submitting the app to the YunoHost community
+  catalog: `1.6` felt presumptuous for a first public submission, so this
+  moment is treated as the app's real "v1" instead. Purely a display
+  change (manifest.toml, README badge, the footer version shown in the
+  app itself) — no behavior difference. Historical entries below keep
+  their original version numbers as an accurate record of what was true
+  at the time, rather than being renumbered retroactively (same choice
+  already made during the first versioning reset, see 1.0~ynh1 further
+  down). Deployed via a clean uninstall/reinstall rather than
+  `app upgrade` on the already-running instance, since YunoHost's upgrade
+  path isn't meant to go to a lower version number.
+
 ## [1.6~ynh4] — 2026-07-18
 
 ### Fixed
