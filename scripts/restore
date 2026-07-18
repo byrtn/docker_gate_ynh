@@ -3,26 +3,26 @@
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
-# Cause racine trouvée par 2 vrais tests `yunohost backup restore` le
-# 17/07/2026 (audit) :
-# 1er correctif insuffisant : `$(dirname "$0")` (comme pour _common.sh)
-# résout bien vers le script lui-même, mais un 2ᵉ test réel a confirmé que
-# PENDANT une restauration, YunoHost ne met à disposition à cet endroit
-# QUE le dossier `scripts/` — PAS `conf/`/`logo.png`/`sources/` du paquet
-# (répertoire de travail temporaire `/var/cache/yunohost/app_tmp_work_dirs/...`,
-# confirmé par le log réel : `cp .../app_tmp_work_dirs/appXXX/../conf/...`
-# introuvable). Ces fichiers ne sont donc PAS lus depuis le paquet source
-# ici (contrairement à install/upgrade, où ils le sont) — voir plus bas,
-# lus depuis `install_dir/.package/` à la place, où `scripts/install`/
-# `upgrade` les ont copiés et qui EST fidèlement restauré depuis l'archive.
-ynh_script_progression --message="Restauration des fichiers de l'application..." --weight=10
+# Root cause found via 2 real `yunohost backup restore` tests on 2026-07-17
+# (audit):
+# 1st fix insufficient: `$(dirname "$0")` (same as for _common.sh) does
+# resolve to the script itself, but a 2nd real test confirmed that DURING a
+# restore, YunoHost only makes the `scripts/` folder available at this
+# location — NOT the package's `conf/`/`logo.png`/`sources/` (a temporary
+# working directory `/var/cache/yunohost/app_tmp_work_dirs/...`, confirmed
+# by the real log: `cp .../app_tmp_work_dirs/appXXX/../conf/...` not found).
+# These files are therefore NOT read from the source package here (unlike
+# install/upgrade, where they are) — see below, read from
+# `install_dir/.package/` instead, where `scripts/install`/`upgrade` copied
+# them and which IS faithfully restored from the archive.
+ynh_script_progression --message="Restoring the app's files..." --weight=10
 ynh_restore
 
-ynh_script_progression --message="Vérification de Docker..." --weight=10
+ynh_script_progression --message="Checking Docker..." --weight=10
 ynh_docker_gate__ensure_docker_installed
 usermod -aG docker "$app"
 
-ynh_script_progression --message="Reconstruction de l'environnement Python..." --weight=15
+ynh_script_progression --message="Rebuilding the Python environment..." --weight=15
 python3 -m venv "$venv_dir"
 "$venv_dir/bin/pip" install --upgrade pip
 "$venv_dir/bin/pip" install -r "$install_dir/requirements.txt"
@@ -30,34 +30,34 @@ python3 -m venv "$venv_dir"
 chown -R "$app:$app" "$install_dir"
 chmod 750 "$install_dir"
 
-ynh_script_progression --message="Restauration des droits sudo ciblés..." --weight=5
+ynh_script_progression --message="Restoring the targeted sudo rights..." --weight=5
 cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/docker_gate
 sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
 chmod 440 /etc/sudoers.d/docker_gate
 chown root:root /etc/sudoers.d/docker_gate
-visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers généré est invalide, restauration interrompue par sécurité."
+visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="The generated sudoers file is invalid, restore aborted for safety."
 
-ynh_script_progression --message="Restauration du logo..." --weight=2
+ynh_script_progression --message="Restoring the logo..." --weight=2
 mkdir -p /usr/share/yunohost/applogos
 install -o root -g root -m 0644 "$install_dir/.package/logo.png" "/usr/share/yunohost/applogos/$app.png"
 yunohost user permission update "$app.main" --logo "$install_dir/.package/logo.png"
 
-ynh_script_progression --message="Réenregistrement du service..." --weight=5
+ynh_script_progression --message="Re-registering the service..." --weight=5
 yunohost service add "$app" --description="Docker Gate for YunoHost" --log="/var/log/$app/$app.log"
 systemctl enable "$app"
 systemctl start "$app"
 
-# 3ᵉ trouvaille du même test réel (17/07/2026) : le cœur YunoHost restaure
-# bien le FICHIER de conf nginx (déclaré dans scripts/backup), mais ne
-# recharge jamais nginx tout seul après une restauration — sans ce
-# rechargement explicite, l'app restaurée répond en 404 public (nginx sert
-# encore son ancienne conf en mémoire) alors que le service applicatif
-# tourne très bien. Constaté en conditions réelles : 404 avant ce
-# rechargement manuel, 302 (comportement normal SSOwat) juste après.
-ynh_script_progression --message="Rechargement de nginx..." --weight=2
-# `ynh_systemctl` n'existe pas dans cette version des helpers (confirmé par
-# un vrai test : "commande introuvable") — `systemctl` natif directement,
-# déjà utilisé sans problème ailleurs dans nos propres scripts (upgrade).
+# 3rd finding from the same real test (2026-07-17): YunoHost core does
+# restore the nginx conf FILE correctly (declared in scripts/backup), but
+# never reloads nginx on its own after a restore — without this explicit
+# reload, the restored app returns a public 404 (nginx is still serving its
+# old config from memory) even though the app's own service is running
+# fine. Observed in real conditions: 404 before this manual reload, 302
+# (normal SSOwat behavior) right after.
+ynh_script_progression --message="Reloading nginx..." --weight=2
+# `ynh_systemctl` doesn't exist in this version of the helpers (confirmed by
+# a real test: "command not found") — using native `systemctl` directly,
+# already used without issue elsewhere in our own scripts (upgrade).
 systemctl reload nginx
 
-ynh_script_progression --message="Restauration terminée." --last
+ynh_script_progression --message="Restore completed." --last

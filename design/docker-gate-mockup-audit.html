@@ -132,75 +132,75 @@
 
   <header>
     <div class="logo"><span class="tri"></span> WAPPOS <span style="color:var(--text-muted); font-weight:500;">docker gate</span></div>
-    <a class="back" href="#">← Retour</a>
+    <a class="back" href="#">← Back</a>
   </header>
 
   <div class="eyebrow">Docker Gate — Wappos v2</div>
-  <h1>Audit &amp; nettoyage</h1>
-  <p class="sub">Détecte les résidus laissés par des installations interrompues ou des suppressions incomplètes. Rien n'est supprimé sans confirmation explicite.</p>
+  <h1>Audit &amp; cleanup</h1>
+  <p class="sub">Detects residue left behind by interrupted installations or incomplete removals. Nothing is deleted without explicit confirmation.</p>
 
   <div class="summary">
-    <div class="stat warn"><div class="n">2</div><div class="l">Conteneurs orphelins</div></div>
-    <div class="stat warn"><div class="n">1</div><div class="l">Volume orphelin</div></div>
-    <div class="stat clean"><div class="n">0</div><div class="l">Image dangling</div></div>
-    <div class="stat clean"><div class="n">0</div><div class="l">Domaine vide</div></div>
+    <div class="stat warn"><div class="n">2</div><div class="l">Orphan containers</div></div>
+    <div class="stat warn"><div class="n">1</div><div class="l">Orphan volume</div></div>
+    <div class="stat clean"><div class="n">0</div><div class="l">Dangling image</div></div>
+    <div class="stat clean"><div class="n">0</div><div class="l">Empty domain</div></div>
   </div>
 
   <div class="global-action">
-    <button class="clean-all">Nettoyer les 3 résidus détectés</button>
+    <button class="clean-all">Clean up 3 detected leftovers</button>
   </div>
 
-  <div class="divider"><div class="line"></div><span>Conteneurs orphelins</span><span class="count">2</span><div class="line red"></div></div>
+  <div class="divider"><div class="line"></div><span>Orphan containers</span><span class="count">2</span><div class="line red"></div></div>
   <div class="list">
     <div class="row">
       <span class="dot"></span>
       <div class="info">
         <div class="name">whoami-test-14072026</div>
-        <div class="meta">Créé le 14/07 · arrêté · aucune app YunoHost associée</div>
+        <div class="meta">Created on 07/14 · stopped · no associated YunoHost app</div>
       </div>
       <span class="tag">Docker</span>
-      <button class="del">Supprimer</button>
+      <button class="del">Delete</button>
     </div>
     <div class="row">
       <span class="dot"></span>
       <div class="info">
         <div class="name">kuma-test-orphan</div>
-        <div class="meta">Créé le 13/07 · en cours d'exécution · aucune app YunoHost associée</div>
+        <div class="meta">Created on 07/13 · running · no associated YunoHost app</div>
       </div>
       <span class="tag">Docker</span>
-      <button class="del">Supprimer</button>
+      <button class="del">Delete</button>
     </div>
   </div>
 
-  <div class="divider"><div class="line"></div><span>Volumes orphelins</span><span class="count">1</span><div class="line red"></div></div>
+  <div class="divider"><div class="line"></div><span>Orphan volumes</span><span class="count">1</span><div class="line red"></div></div>
   <div class="list">
     <div class="row">
       <span class="dot"></span>
       <div class="info">
         <div class="name">docker_gate_kuma_data</div>
-        <div class="meta">2.4 Mo · plus rattaché à aucune app installée</div>
+        <div class="meta">2.4 MB · no longer attached to any installed app</div>
       </div>
       <span class="tag">Volume</span>
-      <button class="del">Supprimer</button>
+      <button class="del">Delete</button>
     </div>
   </div>
 
-  <div class="divider"><div class="line"></div><span>Images dangling</span><span class="count">0</span><div class="line red"></div></div>
+  <div class="divider"><div class="line"></div><span>Dangling images</span><span class="count">0</span><div class="line red"></div></div>
   <div class="clean-state">
-    Rien à signaler
-    <div class="sub2">Aucune image dangling détectée sur ce serveur.</div>
+    Nothing to report
+    <div class="sub2">No dangling image detected on this server.</div>
   </div>
 
-  <div class="divider"><div class="line"></div><span>Domaines vides</span><span class="count">0</span><div class="line red"></div></div>
+  <div class="divider"><div class="line"></div><span>Empty domains</span><span class="count">0</span><div class="line red"></div></div>
   <div class="clean-state">
-    Rien à signaler
-    <div class="sub2">Tous les domaines créés sont rattachés à une app active.</div>
+    Nothing to report
+    <div class="sub2">All created domains are attached to an active app.</div>
   </div>
 
 </div>
 
 <div class="bottom-bar">
-  <button>Nettoyer les 3 résidus détectés</button>
+  <button>Clean up 3 detected leftovers</button>
 </div>
 
 </body>

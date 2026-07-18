@@ -10,17 +10,17 @@ venv_dir="$install_dir/venv"
 # PERSONAL HELPERS
 #=================================================
 
-# Vérifie que Docker CE est installé et fonctionnel, l'installe sinon.
-# Gère le piège iptables/nftables rencontré le 10/07/2026 (VM 203, incident Portainer) :
-# après installation, on force un redémarrage du service pour reconstruire
-# proprement les chaînes réseau si le système utilise nftables.
+# Checks that Docker CE is installed and functional, installs it otherwise.
+# Handles the iptables/nftables trap encountered on 2026-07-10 (VM 203,
+# Portainer incident): after installation, force a service restart to
+# properly rebuild the network chains if the system uses nftables.
 ynh_docker_gate__ensure_docker_installed() {
     if command -v docker >/dev/null 2>&1 && systemctl is-active --quiet docker; then
-        ynh_print_info --message="Docker déjà installé et actif, rien à faire."
+        ynh_print_info --message="Docker already installed and active, nothing to do."
         return 0
     fi
 
-    ynh_print_info --message="Installation de Docker CE..."
+    ynh_print_info --message="Installing Docker CE..."
 
     ynh_apt update
     ynh_apt install ca-certificates curl gnupg
@@ -43,14 +43,14 @@ ynh_docker_gate__ensure_docker_installed() {
 
     systemctl enable --now docker
 
-    # Piège connu (10/07/2026) : si nftables était déjà actif avant l'installation
-    # de Docker, les chaînes iptables créées au premier démarrage peuvent être
-    # incohérentes. Un redémarrage propre du service les reconstruit correctement.
+    # Known trap (2026-07-10): if nftables was already active before installing
+    # Docker, the iptables chains created on first startup can end up
+    # inconsistent. A clean service restart rebuilds them correctly.
     systemctl restart docker
 
     if ! systemctl is-active --quiet docker; then
-        ynh_die --message="Docker n'a pas pu démarrer correctement après installation."
+        ynh_die --message="Docker failed to start properly after installation."
     fi
 
-    ynh_print_info --message="Docker CE installé et actif."
+    ynh_print_info --message="Docker CE installed and active."
 }

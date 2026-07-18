@@ -1,21 +1,20 @@
 #!/bin/bash
 #
-# Sauvegarde Docker Gate lui-même (fichiers, config, état apps.json)
-# UNIQUEMENT — ne couvre PAS les conteneurs/volumes/données des apps Docker
-# gérées via l'interface. Choix assumé, pas un oubli : voir
-# doc/ADMIN_fr.md ("Ce que Docker Gate NE fait PAS") pour le détail
-# complet et la justification.
+# Backs up Docker Gate itself (files, config, apps.json state) ONLY — does
+# NOT cover the containers/volumes/data of the Docker apps managed through
+# the interface. A deliberate choice, not an oversight: see doc/ADMIN.md
+# ("What Docker Gate does NOT do") for the full detail and rationale.
 
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
-ynh_script_progression --message="Sauvegarde des fichiers de l'application..."
+ynh_script_progression --message="Backing up the app's files..."
 ynh_backup --src_path="$install_dir"
 
-ynh_script_progression --message="Sauvegarde de la configuration nginx..."
+ynh_script_progression --message="Backing up the nginx configuration..."
 ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 
-ynh_script_progression --message="Sauvegarde de la configuration systemd..."
+ynh_script_progression --message="Backing up the systemd configuration..."
 ynh_backup --src_path="/etc/systemd/system/$app.service"
 
-ynh_script_progression --message="Sauvegarde terminée." --last
+ynh_script_progression --message="Backup completed." --last

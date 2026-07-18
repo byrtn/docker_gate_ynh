@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Docker Gate — interface d'administration YunoHost
-Étape 2 (11/07/2026) : formulaire "+ Ajouter une app Docker" fonctionnel,
-modes chemin et sous-domaine dédié, suppression avec vérification à 3
-niveaux (règle #30).
+Docker Gate — YunoHost administration interface
+Step 2 (2026-07-11): working "+ Add a Docker app" form, path and dedicated
+subdomain modes, removal with 3-layer verification (rule #30).
 
-Internationalisation (15/07/2026) : anglais par défaut, français
-sélectionnable dans l'interface (cookie longue durée) et dès l'installation
-(voir manifest.toml, question default_language + data/default_language.txt
-écrit par les scripts install/upgrade/restore).
+Internationalization (2026-07-15): English by default, French selectable
+from the interface (long-lived cookie) and right from install (see
+manifest.toml, default_language question + data/default_language.txt
+written by the install/upgrade/restore scripts).
 """
 import hmac
 import secrets
@@ -21,11 +20,11 @@ import ynh_manager
 import progress
 import i18n
 
-# Endpoints qui modifient un état réel (création/suppression d'app, de
-# conteneur orphelin, de volume orphelin, nettoyage d'images) — protégés par
-# jeton CSRF. /parse_input n'en a pas besoin : purement en lecture (aucun
-# effet de bord), et sa réponse JSON n'est de toute façon pas lisible depuis
-# une origine tierce (pas d'en-tête CORS renvoyé par Flask par défaut).
+# Endpoints that change real state (creating/removing an app, an orphan
+# container, an orphan volume, cleaning up images) — protected by a CSRF
+# token. /parse_input doesn't need one: purely read-only (no side effect),
+# and its JSON response isn't readable from a third-party origin anyway (no
+# CORS header returned by Flask by default).
 CSRF_PROTECTED_ENDPOINTS = {
     "add",
     "remove",
@@ -36,24 +35,24 @@ CSRF_PROTECTED_ENDPOINTS = {
 }
 
 LANG_COOKIE_NAME = "docker_gate_lang"
-LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 an
+LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
-# Version affichée dans le footer (base.html) — tenue à jour manuellement en
-# même temps que `version` dans manifest.toml (partie avant `~ynh`), pas
-# lue dynamiquement pour éviter une dépendance de parsing au manifeste au
-# runtime pour un simple affichage.
+# Version shown in the footer (base.html) — kept in sync manually with
+# `version` in manifest.toml (the part before `~ynh`), not parsed
+# dynamically to avoid a manifest-parsing dependency at runtime for a
+# simple display.
 APP_VERSION = "1.6"
 
 app = Flask(__name__)
 
 
 def _load_or_create_secret_key():
-    """Génère une clé secrète aléatoire au premier démarrage et la conserve
-    dans data/ (même dossier que apps.json, déjà protégé par les permissions
-    posées à l'installation — chown/chmod sur install_dir). Remplace une
-    ancienne clé codée en dur dans le code source (mauvaise pratique pour un
-    dépôt destiné à devenir public, même si le risque réel était faible tant
-    qu'aucune donnée de session sensible n'est stockée)."""
+    """Generates a random secret key on first startup and keeps it in data/
+    (same directory as apps.json, already protected by the permissions set
+    at install time — chown/chmod on install_dir). Replaces an old key that
+    used to be hardcoded in the source code (bad practice for a repo meant
+    to become public, even though the real risk was low as long as no
+    sensitive session data is stored)."""
     key_file = Path(__file__).parent / "data" / ".secret_key"
     key_file.parent.mkdir(parents=True, exist_ok=True)
     if key_file.exists():
@@ -68,9 +67,9 @@ app.secret_key = _load_or_create_secret_key()
 
 
 def _default_lang_from_install():
-    """Langue choisie à l'installation (voir manifest.toml, question
-    default_language) — sert de repli uniquement tant que l'utilisateur n'a
-    jamais choisi explicitement dans l'interface (pas de cookie posé)."""
+    """Language chosen at install time (see manifest.toml, default_language
+    question) — used as a fallback only, as long as the user has never
+    explicitly chosen one from the interface (no cookie set yet)."""
     default_lang_file = Path(__file__).parent / "data" / "default_language.txt"
     if default_lang_file.exists():
         return i18n.normalize_lang(default_lang_file.read_text().strip())
@@ -78,11 +77,11 @@ def _default_lang_from_install():
 
 
 def get_lang():
-    """Langue courante : cookie posé par l'utilisateur (voir /set_language)
-    en priorité, sinon la langue choisie à l'installation, sinon l'anglais
-    par défaut. Jamais déduite du contexte Flask à l'intérieur de
-    ynh_manager.py — capturée ici et passée explicitement (voir docstring
-    de create_docker_app)."""
+    """Current language: the cookie set by the user (see /set_language) takes
+    priority, otherwise the language chosen at install time, otherwise
+    English by default. Never inferred from Flask context inside
+    ynh_manager.py — captured here and passed explicitly (see the
+    create_docker_app docstring)."""
     cookie_lang = request.cookies.get(LANG_COOKIE_NAME)
     if cookie_lang:
         return i18n.normalize_lang(cookie_lang)
@@ -90,11 +89,10 @@ def get_lang():
 
 
 class PrefixMiddleware:
-    """Rend Flask conscient du préfixe de chemin sous lequel nginx le monte
-    (ex: /docker-gate), transmis via l'en-tête X-Forwarded-Prefix défini
-    dans conf/nginx.conf. Sans ça, toute redirection générée par Flask
-    casserait en sortant du sous-chemin (point de vigilance noté depuis
-    l'étape 1)."""
+    """Makes Flask aware of the path prefix nginx mounts it under
+    (e.g. /docker-gate), passed via the X-Forwarded-Prefix header set in
+    conf/nginx.conf. Without this, any redirect generated by Flask would
+    break out of the subpath (a watch point noted since step 1)."""
 
     def __init__(self, wsgi_app):
         self.wsgi_app = wsgi_app
@@ -113,8 +111,8 @@ app.wsgi_app = PrefixMiddleware(app.wsgi_app)
 
 
 def _get_csrf_token():
-    """Jeton CSRF stocké dans la session signée Flask (voir secret_key
-    ci-dessus) — un par session navigateur, généré au premier accès."""
+    """CSRF token stored in the signed Flask session (see secret_key
+    above) — one per browser session, generated on first access."""
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(16)
     return session["csrf_token"]
@@ -138,9 +136,9 @@ def _check_csrf():
 
 @app.route("/set_language/<lang>")
 def set_language(lang):
-    """Changement de langue depuis l'interface (voir sélecteur dans
-    base.html) — posé en cookie longue durée, pas juste en session, pour que
-    le choix survive à une fermeture de navigateur."""
+    """Language change from the interface (see the switcher in
+    base.html) — set as a long-lived cookie, not just in the session, so
+    the choice survives closing the browser."""
     lang = i18n.normalize_lang(lang)
     target = request.referrer or url_for("index")
     resp = make_response(redirect(target))
@@ -169,9 +167,9 @@ def add():
     domain_parent = request.form.get("domain_parent", "").strip()
     path = request.form.get("path", "").strip()
     new_subdomain = request.form.get("new_subdomain", "").strip().lower()
-    # Modèle de permission natif YunoHost à 3 groupes (audit 17/07/2026,
+    # YunoHost's native 3-group permission model (audit 2026-07-17,
     # docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md) —
-    # valeur repliée sur "admins" (le plus restrictif) si absente/invalide.
+    # falls back to "admins" (the most restrictive) if missing/invalid.
     visibility = request.form.get("visibility", "admins").strip()
     if visibility not in ("admins", "all_users", "visitors"):
         visibility = "admins"
@@ -212,9 +210,9 @@ def add():
         except ynh_manager.DockerConnectorError as e:
             progress.fail(job_id, str(e))
         except Exception as e:
-            # Filet de sécurité : toute erreur inattendue doit quand même
-            # arrêter proprement le suivi de progression, pas le laisser
-            # tourner indéfiniment (règle #1 — jamais d'échec silencieux).
+            # Safety net: any unexpected error must still cleanly stop the
+            # progress tracking, not leave it running forever (rule #1 —
+            # never fail silently).
             progress.fail(job_id, i18n.t("flash_unexpected_error", lang, error=e))
 
     threading.Thread(target=run_creation, daemon=True).start()
@@ -299,10 +297,10 @@ def remove(slug):
     except ynh_manager.DockerConnectorError as e:
         flash(str(e), "error")
     except Exception as e:
-        # Audit chantier 5 (17/07/2026, cas limites) : sans ce filet, une
-        # erreur inattendue ici (pas une DockerConnectorError) laissait
-        # Flask afficher une page 500 brute au lieu d'un message clair —
-        # même principe que le filet déjà en place pour la création d'app.
+        # Audit workstream 5 (2026-07-17, edge cases): without this net, an
+        # unexpected error here (not a DockerConnectorError) left Flask
+        # showing a raw 500 page instead of a clear message — same
+        # principle as the net already in place for app creation.
         flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
     return redirect(url_for("index"))
 
@@ -310,13 +308,13 @@ def remove(slug):
 @app.route("/audit")
 def audit():
     lang = get_lang()
-    # Audit chantier 5 (17/07/2026, cas limites) : avant ce correctif, un
-    # incident transitoire sur UN SEUL de ces 4 contrôles (ex: `yunohost
-    # domain list` via sudo -n indisponible un court instant) faisait
-    # planter TOUTE la page avec une erreur 500 brute, y compris les 3
-    # autres contrôles qui, eux, avaient réussi. Chacun est maintenant
-    # isolé : un échec dégrade proprement (liste vide + avertissement),
-    # sans jamais empêcher d'afficher le reste de la page.
+    # Audit workstream 5 (2026-07-17, edge cases): before this fix, a
+    # transient failure on just ONE of these 4 checks (e.g. `yunohost
+    # domain list` via sudo -n briefly unavailable) crashed the WHOLE page
+    # with a raw 500 error, including the 3 other checks that had actually
+    # succeeded. Each one is now isolated: a failure degrades gracefully
+    # (empty list + warning), without ever preventing the rest of the page
+    # from rendering.
     def _safe(fn, *args):
         try:
             return fn(*args)

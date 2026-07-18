@@ -1,24 +1,24 @@
 """
-Docker Gate — internationalisation FR/EN.
+Docker Gate — FR/EN internationalization.
 
-Mécanisme volontairement léger (dictionnaire Python, pas de compilation
-.po/.mo) plutôt que Flask-Babel — cohérent avec le style minimaliste du
-reste du projet, et suffisant pour le volume de texte de cette app.
+Deliberately lightweight mechanism (a Python dict, no .po/.mo compilation)
+rather than Flask-Babel — consistent with the rest of the project's
+minimalist style, and enough for this app's volume of text.
 
-Anglais par défaut (cohérent avec la publication publique à venir),
-français sélectionnable dans l'interface (voir /set_language dans app.py)
-et dès l'installation (voir manifest.toml, question default_language).
+English by default (consistent with the upcoming public release), French
+selectable from the interface (see /set_language in app.py) and right from
+install (see manifest.toml, default_language question).
 
-Chaque clé porte le texte des deux langues. Les messages paramétrés
-utilisent la syntaxe `.format(**kwargs)` (ex: "{domain}").
+Each key carries the text for both languages. Parameterized messages use
+the `.format(**kwargs)` syntax (e.g. "{domain}").
 """
 
 DEFAULT_LANG = "en"
 LANGS = ("en", "fr")
 
 STRINGS = {
-    # --- Étapes de progression (clés stables, jamais affichées telles
-    # quelles — voir build_create_steps dans ynh_manager.py et progress.html) ---
+    # --- Progress steps (stable keys, never displayed as-is —
+    # see build_create_steps in ynh_manager.py and progress.html) ---
     "step_check_params": {"en": "Checking parameters", "fr": "Vérification des paramètres"},
     "step_pick_port": {"en": "Selecting a free port", "fr": "Sélection d'un port libre"},
     "step_create_domain": {"en": "Creating the YunoHost domain", "fr": "Création du domaine YunoHost"},
@@ -30,7 +30,7 @@ STRINGS = {
     "step_run_container": {"en": "Starting the Docker container", "fr": "Lancement du conteneur Docker"},
     "step_expose_app": {"en": "Exposing via YunoHost (nginx + SSO)", "fr": "Exposition via YunoHost (nginx + SSO)"},
 
-    # --- Erreurs / avertissements (ynh_manager.py) ---
+    # --- Errors / warnings (ynh_manager.py) ---
     "err_no_free_port": {
         "en": "No free port in the 9100-9999 range.",
         "fr": "Aucun port libre dans la plage 9100-9999.",
@@ -277,12 +277,12 @@ STRINGS = {
         "fr": "Docker CE a été entièrement désinstallé de ce serveur.",
     },
 
-    # --- Templates : commun ---
+    # --- Templates: shared ---
     "btn_confirm": {"en": "Confirm?", "fr": "Confirmer ?"},
-    # Note : le footer "Un produit BYRTN — souveraineté numérique." reste
-    # volontairement TOUJOURS en français, dans les deux langues (demande
-    # explicite de Patrick, 15/07/2026) — codé en dur dans base.html, pas
-    # une clé de traduction ici.
+    # Note: the footer "A BYRTN product — digital sovereignty." deliberately
+    # stays ALWAYS in French, in both languages (explicit request from
+    # Patrick, 2026-07-15) — hardcoded in base.html, not a translation key
+    # here.
     "btn_choose_file": {"en": "Choose file", "fr": "Choisir un fichier"},
     "no_file_chosen": {"en": "No file chosen", "fr": "Aucun fichier choisi"},
 
@@ -352,10 +352,10 @@ STRINGS = {
         "en": "📌 Don't forget: a DNS record for this subdomain must already exist with your registrar (or the automatic registrar must be configured in YunoHost).",
         "fr": "📌 N'oublie pas : un enregistrement DNS pour ce sous-domaine doit déjà exister chez ton registrar (ou le registrar automatique doit être configuré dans YunoHost).",
     },
-    # Modèle de permission natif YunoHost à 3 groupes (audit 17/07/2026,
-    # docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md) — les
-    # 3 options correspondent 1:1 aux groupes réels admins/all_users/visitors,
-    # aucune réinvention custom.
+    # YunoHost's native 3-group permission model (audit 2026-07-17,
+    # docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md) — the
+    # 3 options map 1:1 to the real admins/all_users/visitors groups, no
+    # custom reinvention.
     "visibility_field_label": {"en": "Access", "fr": "Accès"},
     "visibility_option_admins": {"en": "Administrators only (default)", "fr": "Administrateurs uniquement (par défaut)"},
     "visibility_option_users": {"en": "All YunoHost accounts", "fr": "Tous les comptes YunoHost"},
@@ -437,11 +437,11 @@ STRINGS = {
         "en": "Clean up {n} detected leftover{plural}",
         "fr": "Nettoyer {n} résidu{plural} détecté{plural}",
     },
-    # Audit chantier 4 (17/07/2026) : ce bouton groupé ne compte et ne
-    # touche jamais les volumes ni les domaines vides (voir commentaire
-    # dans audit.html) — sans cette note, rien à l'écran ne le signalait,
-    # risque de croire que "tout" est nettoyé alors que 2 catégories sur 4
-    # ne le sont jamais par ce bouton.
+    # Audit workstream 4 (2026-07-17): this bulk button never counts or
+    # touches volumes or empty domains (see comment in audit.html) —
+    # without this note, nothing on screen signaled that, risking the
+    # belief that "everything" is cleaned up when 2 out of 4 categories are
+    # never handled by this button.
     "bulk_cleanup_scope_note": {
         "en": "Containers and images only — volumes and empty domains are always handled one at a time, below.",
         "fr": "Conteneurs et images uniquement — les volumes et domaines vides se traitent toujours un par un, ci-dessous.",
@@ -511,8 +511,8 @@ STRINGS = {
 
 
 def t(key, lang, **kwargs):
-    """Traduit `key` dans `lang` (repli sur l'anglais puis sur la clé
-    elle-même si absente — ne doit jamais planter sur une clé manquante)."""
+    """Translates `key` into `lang` (falls back to English, then to the key
+    itself if missing — must never crash on a missing key)."""
     entry = STRINGS.get(key)
     if entry is None:
         return key
@@ -521,8 +521,8 @@ def t(key, lang, **kwargs):
 
 
 def normalize_lang(lang):
-    """Ramène une valeur de langue quelconque (cookie, en-tête, réglage
-    d'installation) à une langue supportée, repli sur l'anglais."""
+    """Brings any language value (cookie, header, install setting) back to
+    a supported language, falling back to English."""
     if lang and lang.lower() in LANGS:
         return lang.lower()
     return DEFAULT_LANG

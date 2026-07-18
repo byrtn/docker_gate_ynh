@@ -149,14 +149,13 @@
 </div>
 
 <script>
-// Nettoyage groupé (chantier 3-bis, 16/07/2026) : ne réutilise QUE les
-// formulaires déjà existants (conteneurs orphelins + images dangling,
-// classe .bulk-target), chacun avec son propre jeton CSRF déjà rendu par
-// le serveur — aucune nouvelle route, aucun nouveau droit. Les volumes
-// orphelins sont volontairement exclus (voir orphan_volumes_warning
-// ci-dessus et le commentaire de ynh_manager.py : "action prudente, un
-// par un, jamais groupée" — risque de perte de données réelles).
-// Armement à deux clics, même principe que armDelete().
+// Bulk cleanup (workstream 3-bis, 2026-07-16): reuses ONLY the forms that
+// already exist (orphan containers + dangling images, .bulk-target class),
+// each with its own CSRF token already rendered by the server — no new
+// route, no new permission. Orphan volumes are deliberately excluded (see
+// orphan_volumes_warning above and the comment in ynh_manager.py: "a
+// cautious action, one at a time, never bulk" — risk of real data loss).
+// Two-click arming, same principle as armDelete().
 function armCleanAll(btn) {
   if (btn.dataset.armed === '1') {
     runCleanAll(btn);
@@ -179,7 +178,7 @@ function runCleanAll(btn) {
     for (const form of forms) {
       try {
         await fetch(form.action, { method: 'POST', body: new FormData(form) });
-      } catch (e) { /* best-effort : on continue malgré un échec isolé */ }
+      } catch (e) { /* best-effort: keep going despite an isolated failure */ }
     }
     window.location.reload();
   })();

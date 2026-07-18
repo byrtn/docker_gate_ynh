@@ -7,6 +7,17 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.6~ynh2] — 2026-07-18
+
+### Changed
+- Translated all remaining French code comments and docstrings to English
+  across `sources/*.py`, `scripts/*`, `conf/docker_gate.sudoers`,
+  `manifest.toml`, and the HTML templates — packaging-only change, no
+  behavior difference. The app's actual bilingual EN/FR user interface
+  (`i18n.py`, `scripts/remove`'s interactive questions, `README_fr.md`,
+  `doc/ADMIN_fr.md`) is untouched, as is the deliberately French-only
+  footer tagline ("souveraineté numérique").
+
 ## [1.6~ynh1] — 2026-07-18
 
 ### Fixed

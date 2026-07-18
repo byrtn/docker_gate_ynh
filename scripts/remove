@@ -4,40 +4,41 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 #=================================================
-# AVERTISSEMENT (non-bloquant) : apps enfants encore trackées
+# WARNING (non-blocking): child apps still tracked
 #=================================================
-# Étape 2 (11/07/2026), corrigé le 17/07/2026 (audit sécurité/qualité,
-# docs/02-wappos/audits/2026-07-17-audit-cycle-backup-restore.md) : un
-# `ynh_die` ici avait auparavant la prétention de bloquer complètement la
-# suppression. FAUX EN PRATIQUE — vérifié par un test réel de bout en bout
-# le 17/07/2026 : le cœur de YunoHost déprovisionne quand même les
-# ressources déclarées dans manifest.toml (ports, permission SSO,
-# install_dir, utilisateur système) APRÈS l'échec de ce script, qu'on le
-# veuille ou non — un `ynh_die` ici ne fait qu'empêcher CE script de finir
-# proprement son propre nettoyage (nginx/systemd/sudoers), laissant des
-# fichiers résiduels orphelins en plus, sans rien empêcher réellement.
+# Step 2 (2026-07-11), fixed on 2026-07-17 (security/quality audit,
+# docs/02-wappos/audits/2026-07-17-audit-cycle-backup-restore.md): a
+# `ynh_die` here used to claim it would fully block removal. WRONG IN
+# PRACTICE — verified by a real end-to-end test on 2026-07-17: YunoHost
+# core deprovisions the resources declared in manifest.toml anyway (ports,
+# SSO permission, install_dir, system user) AFTER this script fails,
+# whether we like it or not — a `ynh_die` here only prevents THIS script
+# from finishing its own cleanup properly (nginx/systemd/sudoers), leaving
+# extra orphaned residual files behind, without actually preventing
+# anything.
 #
-# Décision retenue : avertir honnêtement plutôt que promettre une garantie
-# techniquement impossible à tenir, et laisser la suppression aller à son
-# terme proprement (pas de résidu nginx/systemd/sudoers). Bonne nouvelle
-# confirmée par le même test : les apps enfants elles-mêmes (l'app YunoHost
-# "redirect", son conteneur Docker, sa conf nginx) ne sont PAS affectées —
-# seule la mémoire que Docker Gate en avait (`data/apps.json`) est perdue.
-# Une réinstallation de Docker Gate détecte alors ces conteneurs comme
-# résidus orphelins via la page /audit (testé et confirmé).
+# Decision made: warn honestly rather than promise a guarantee that's
+# technically impossible to keep, and let removal run to completion
+# cleanly (no nginx/systemd/sudoers residue). Good news confirmed by the
+# same test: the child apps themselves (the YunoHost "redirect" app, its
+# Docker container, its nginx config) are NOT affected — only Docker
+# Gate's own memory of them (`data/apps.json`) is lost. Reinstalling
+# Docker Gate then detects these containers as orphan residue via the
+# /audit page (tested and confirmed).
 data_file="$install_dir/data/apps.json"
 if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')" -gt 0 ]; then
     app_count="$(python3 -c "import json; print(len(json.load(open('$data_file'))))" 2>/dev/null || echo '?')"
 
-    # Bilinguisme (audit chantier 7, 17/07/2026) : ces messages personnalisés
-    # (garde-fou, question interactive) ne bénéficient d'AUCUNE traduction
-    # automatique par YunoHost — contrairement aux questions déclaratives du
-    # manifeste (domain/path/langue), ce sont de simples `ynh_print_warn`/
-    # `read` bash, toujours affichés dans la langue écrite en dur par le
-    # paquet, quel que soit l'admin. Corrigé en réutilisant la préférence de
-    # langue déjà enregistrée par l'app elle-même (`data/default_language.txt`,
-    # posé par install/upgrade/restore, modifiable dans l'interface web) —
-    # lu ici tant que `$install_dir` existe encore (avant déprovisionnement).
+    # Bilingualism (audit workstream 7, 2026-07-17): these custom messages
+    # (safety guard, interactive question) get NO automatic translation
+    # from YunoHost — unlike the manifest's declarative questions
+    # (domain/path/language), these are plain `ynh_print_warn`/`read` bash
+    # calls, always shown in whatever language is hardcoded in the
+    # package, regardless of the admin. Fixed by reusing the language
+    # preference already recorded by the app itself
+    # (`data/default_language.txt`, written by install/upgrade/restore,
+    # changeable from the web interface) — read here while `$install_dir`
+    # still exists (before deprovisioning).
     lang="$(cat "$install_dir/data/default_language.txt" 2>/dev/null)"
     [ "$lang" = "fr" ] || lang="en"
 
@@ -59,29 +60,29 @@ if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')"
         msg_kept="The apps will NOT be touched: their Docker containers and YunoHost exposure remain in place, but Docker Gate will lose track of them. After a later reinstall, find them again via the 'Audit & cleanup' page (orphan containers). To remove them later, use the 'Delete' button on each app from the interface. WARNING: these apps still need Docker CE to work — if you plan to uninstall Docker CE (next question, or later), these apps will stop working until Docker CE is reinstalled."
     fi
 
-    # Question interactive (17/07/2026, demandée explicitement par Patrick
-    # suite à la découverte du 17/07 sur ce même chantier) : plutôt que de
-    # laisser silencieusement les apps enfants devenir orphelines, on
-    # propose explicitement de les supprimer AVEC leurs données en même
-    # temps que Docker Gate. Protégé par `[ -t 0 ]` (uniquement si un vrai
-    # terminal est attaché, comme pour les questions d'installation du
-    # manifeste) — jamais de `read` bloquant lors d'un appel non-interactif
-    # (API, script), qui garde alors le comportement prudent par défaut
-    # (rien n'est touché, juste un avertissement).
+    # Interactive question (2026-07-17, explicitly requested by Patrick
+    # following the 2026-07-17 finding on this same workstream): rather
+    # than silently letting child apps become orphaned, explicitly offer
+    # to remove them WITH their data at the same time as Docker Gate.
+    # Protected by `[ -t 0 ]` (only if a real terminal is attached, same as
+    # for the manifest's install questions) — never a blocking `read` on a
+    # non-interactive call (API, script), which then keeps the safe
+    # default behavior (nothing is touched, just a warning).
     remove_children=0
     if [ -t 0 ]; then
-        # Important (trouvé le 17/07/2026 en conditions réelles) : `read -p`
-        # écrit son texte de prompt sur un canal que l'affichage YunoHost
-        # (moulinette) ne montre PAS de façon fiable — la question était
-        # invisible pour l'admin, qui ne voyait qu'un silence avant de devoir
-        # deviner qu'il fallait taper une réponse. Corrigé en imprimant la
-        # question via `ynh_print_warn` (même canal, même style "Attention :"
-        # que le reste des messages déjà visibles), puis un `read` SANS son
-        # propre prompt, qui se contente de récupérer la ligne tapée.
+        # Important (found on 2026-07-17 under real conditions): `read -p`
+        # writes its prompt text to a channel that YunoHost's display (the
+        # job runner) does NOT show reliably — the question was invisible
+        # to the admin, who only saw silence before having to guess that
+        # typing an answer was expected. Fixed by printing the question via
+        # `ynh_print_warn` (same channel, same "Warning:" style as the rest
+        # of the already-visible messages), then a `read` WITHOUT its own
+        # prompt, which just captures the typed line.
         ynh_print_warn --message="$msg_children_exist"
-        # Réponse EXPLICITE exigée (demandé par Patrick le 17/07/2026) — un
-        # Entrée seul ou une réponse non reconnue reboucle sur la question
-        # au lieu de choisir silencieusement "non" à la place de l'admin.
+        # An EXPLICIT answer is required (requested by Patrick on
+        # 2026-07-17) — a bare Enter or an unrecognized answer loops back
+        # to the question instead of silently choosing "no" on the admin's
+        # behalf.
         answer=""
         while true; do
             ynh_print_warn --message="$msg_question"
@@ -106,10 +107,10 @@ if [ -f "$data_file" ] && [ "$(cat "$data_file" 2>/dev/null | grep -c '"slug"')"
 
     if [ "$remove_children" -eq 1 ]; then
         ynh_script_progression --message="$msg_progress" --weight=15
-        # Réutilise directement remove_docker_app() (même logique à 3
-        # couches, mêmes vérifications que la suppression via l'interface
-        # web) plutôt que de réimplémenter la suppression en bash — une
-        # seule source de vérité pour "comment on supprime une app".
+        # Directly reuses remove_docker_app() (same 3-layer logic, same
+        # checks as removal via the web interface) rather than
+        # reimplementing removal in bash — a single source of truth for
+        # "how an app gets removed".
         "$venv_dir/bin/python3" - <<PYEOF
 import sys
 sys.path.insert(0, "$install_dir")
@@ -131,30 +132,29 @@ PYEOF
 fi
 
 #=================================================
-# QUESTION INTERACTIVE : désinstaller aussi Docker CE ?
+# INTERACTIVE QUESTION: also uninstall Docker CE?
 #=================================================
-# Ajout du 18/07/2026 (demande de Patrick pendant le grand test de
-# réinstallation à froid) : Docker Gate installe Docker CE automatiquement
-# à l'installation (voir ynh_docker_gate__ensure_docker_installed dans
-# _common.sh) — de façon symétrique, propose de le désinstaller aussi ici
-# plutôt que de le laisser systématiquement en place. Même protection
-# `[ -t 0 ]` que la question ci-dessus, jamais bloquant en appel
-# non-interactif (défaut prudent : Docker CE n'est jamais touché sans
-# confirmation explicite).
+# Added on 2026-07-18 (Patrick's request during the full cold
+# reinstallation test): Docker Gate installs Docker CE automatically at
+# install time (see ynh_docker_gate__ensure_docker_installed in
+# _common.sh) — symmetrically, offer to uninstall it here too rather than
+# always leaving it in place. Same `[ -t 0 ]` protection as the question
+# above, never blocking on a non-interactive call (safe default: Docker CE
+# is never touched without explicit confirmation).
 if command -v docker >/dev/null 2>&1; then
     lang="$(cat "$install_dir/data/default_language.txt" 2>/dev/null)"
     [ "$lang" = "fr" ] || lang="en"
 
-    # Recense les conteneurs encore présents à cet instant, répartis en deux
-    # catégories : ceux encore gérés par Docker Gate (container_name connu
-    # de data/apps.json — présents si l'admin a choisi de les garder
-    # ci-dessus, ou en appel non-interactif) et les autres, totalement
-    # étrangers à Docker Gate. Purger Docker CE détruit LES DEUX catégories
-    # sans distinction — avertir seulement sur les "étrangers" aurait donné
-    # un faux sentiment de sécurité tant qu'aucune app tierce n'est
-    # présente, alors que les apps encore gérées (ex : Portainer conservé
-    # ci-dessus) cesseraient tout autant de fonctionner (point soulevé par
-    # Patrick le 18/07/2026 après un test réel de bout en bout).
+    # Lists containers still present at this point, split into two
+    # categories: those still managed by Docker Gate (container_name known
+    # from data/apps.json — present if the admin chose to keep them above,
+    # or on a non-interactive call) and everything else, entirely unrelated
+    # to Docker Gate. Purging Docker CE destroys BOTH categories without
+    # distinction — warning only about "foreign" containers would have
+    # given a false sense of safety as long as no third-party app was
+    # present, while apps still managed (e.g. Portainer kept above) would
+    # stop working just the same (point raised by Patrick on 2026-07-18
+    # after a real end-to-end test).
     tracked_names=""
     if [ -f "$data_file" ]; then
         tracked_names="$("$venv_dir/bin/python3" -c "
@@ -240,7 +240,7 @@ except Exception:
     fi
 fi
 
-ynh_script_progression --message="Arrêt et suppression du service..." --weight=10
+ynh_script_progression --message="Stopping and removing the service..." --weight=10
 
 if yunohost service status "$app" >/dev/null 2>&1; then
     yunohost service remove "$app"
@@ -249,17 +249,17 @@ fi
 systemctl stop "$app" 2>/dev/null || true
 systemctl disable "$app" 2>/dev/null || true
 
-ynh_script_progression --message="Suppression de la configuration nginx..." --weight=5
+ynh_script_progression --message="Removing the nginx configuration..." --weight=5
 ynh_remove_nginx_config
 
-ynh_script_progression --message="Suppression des droits sudo..." --weight=5
+ynh_script_progression --message="Removing the sudo rights..." --weight=5
 rm -f /etc/sudoers.d/docker_gate
 
-ynh_script_progression --message="Suppression de la configuration systemd..." --weight=5
+ynh_script_progression --message="Removing the systemd configuration..." --weight=5
 ynh_remove_systemd_config
 
-# NB : install_dir, la permission SSO et l'utilisateur système de l'app
-# sont automatiquement déprovisionnés par le core YunoHost après ce script
-# (ressources déclarées dans manifest.toml) — pas besoin de le faire ici.
+# NB: install_dir, the app's SSO permission, and its system user are
+# automatically deprovisioned by YunoHost core after this script
+# (resources declared in manifest.toml) — no need to do it here.
 
-ynh_script_progression --message="Suppression terminée." --last
+ynh_script_progression --message="Removal completed." --last

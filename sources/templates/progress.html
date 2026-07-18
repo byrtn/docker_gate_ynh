@@ -60,10 +60,10 @@ function poll() {
           document.getElementById("error-box").textContent = data.error;
           document.getElementById("back-link").style.display = "block";
         } else {
-          // Résumé de fin d'installation (fait / reste à faire) — demandé par
-          // Patrick le 14/07/2026 suite à l'anomalie #49 : un DNS pas encore
-          // propagé ne bloque plus l'installation, mais l'utilisateur doit
-          // être prévenu de ce qu'il reste à vérifier.
+          // End-of-install summary (done / left to check) — requested by
+          // Patrick on 2026-07-14 following issue #49: DNS not yet
+          // propagated no longer blocks the installation, but the user
+          // must be warned about what's left to verify.
           const warnings = data.warnings || [];
           document.getElementById("summary-box").style.display = "block";
           if (warnings.length === 0) {

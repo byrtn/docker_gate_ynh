@@ -1,59 +1,58 @@
-# Droits ciblés pour Docker Gate — ne PAS élargir sans raison précise.
-# Docker lui-même ne nécessite aucun droit ici : l'utilisateur système de l'app
-# est déjà membre du groupe "docker" (ajouté par le script d'installation).
-# Seules les commandes yunohost touchant apps/domaines/nginx/SSO nécessitent root.
+# Targeted rights for Docker Gate — do NOT broaden without a precise reason.
+# Docker itself needs no right here: the app's system user is already a
+# member of the "docker" group (added by the install script).
+# Only yunohost commands touching apps/domains/nginx/SSO need root.
 #
-# Resserrement du 17/07/2026 (audit sécurité, docs/02-wappos/audits/2026-07-17-audit-securite-sudoers.md) :
-# chaque règle est désormais aussi précise que ce que le code appelle
-# réellement (vérifié par grep exhaustif des invocations `_run_sudo`),
-# au lieu d'un joker générique par sous-commande.
+# Tightened on 2026-07-17 (security audit, docs/02-wappos/audits/2026-07-17-audit-securite-sudoers.md):
+# each rule is now exactly as precise as what the code actually calls
+# (verified by an exhaustive grep of `_run_sudo` invocations), instead of a
+# generic wildcard per subcommand.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app install redirect *
-# Suppression restreinte à la famille "redirect" (seul type d'app que
-# Docker Gate installe/gère) — ne permet plus de désinstaller une app
-# quelconque du serveur (docker_gate lui-même, my_webapp, mail, ssh...)
-# même en cas de compromission du process Flask.
+# Removal restricted to the "redirect" family (the only app type Docker
+# Gate installs/manages) — no longer allows removing any arbitrary app on
+# the server (docker_gate itself, my_webapp, mail, ssh...) even if the
+# Flask process were ever compromised.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app remove redirect*
-# Arguments toujours fixes en pratique (aucun appel avec d'autres options) —
-# plus de joker générique après la sous-commande.
+# Arguments always fixed in practice (no call with other options) — no more
+# generic wildcard after the subcommand.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost app list --output-as json
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain list --output-as json
-# "yunohost domain info" : le nom de domaine varie (sous-domaine choisi par
-# l'utilisateur), mais l'option finale est toujours --output-as json.
+# "yunohost domain info": the domain name varies (subdomain chosen by the
+# user), but the final option is always --output-as json.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain info * --output-as json
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain add *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain remove *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert install *
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost domain cert status * --output-as json
-# "yunohost diagnosis run" : uniquement ces 2 diagnostics exacts dans le
-# code (jamais un diagnostic arbitraire) — plus de joker générique.
+# "yunohost diagnosis run": only these 2 exact diagnostics in the code
+# (never an arbitrary diagnosis) — no more generic wildcard.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost diagnosis run --force -- dnsrecords
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost diagnosis run --force -- web
-# Logo Docker Gate posé sur chaque instance "redirect" exposée (chantier 1,
-# 16/07/2026) — même fichier source fixe à chaque fois, seul le nom de
-# l'instance de destination varie (calculé par notre propre code, jamais
-# saisi par l'utilisateur final).
-# ⚠️ Chemin sans "sources/" (audit 17/07/2026, docs/02-wappos/audits/2026-07-17-audit-icone-logo-sudoers.md) :
-# scripts/install et scripts/upgrade font `cp -ar ../sources/. "$install_dir/"`,
-# qui APLATIT le contenu de sources/ directement dans $install_dir — le
-# fichier réel vit donc en /opt/yunohost/__APP__/static/..., jamais sous un
-# sous-dossier sources/. Le "/sources/" ci-dessous cassait la correspondance
-# exacte attendue par sudo (aucune règle ne matchait -> mot de passe requis).
+# Docker Gate logo applied to every exposed "redirect" instance (workstream
+# 1, 2026-07-16) — same fixed source file every time, only the destination
+# instance name varies (computed by our own code, never entered by the end
+# user).
+# ⚠️ Path without "sources/" (audit 2026-07-17, docs/02-wappos/audits/2026-07-17-audit-icone-logo-sudoers.md):
+# scripts/install and scripts/upgrade do `cp -ar ../sources/. "$install_dir/"`,
+# which FLATTENS the contents of sources/ directly into $install_dir — the
+# real file therefore lives at /opt/yunohost/__APP__/static/..., never under
+# a sources/ subfolder. The "/sources/" below used to break the exact match
+# expected by sudo (no rule matched -> password required).
 __APP__ ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /opt/yunohost/__APP__/static/docker-gate-app-logo.png /usr/share/yunohost/applogos/*.png
-# Resserrement du 17/07/2026 : cette règle était `yunohost user permission
-# update *`, un joker total sur une commande qui peut aussi CHANGER LE
-# GROUPE de n'importe quelle permission du serveur (--add/--remove un
-# groupe) — bien plus dangereux qu'un simple logo si le process Flask était
-# un jour compromis (ex. injection dans un champ). Le seul usage réel dans
-# le code est la pose du logo Docker Gate (fichier fixe, jamais choisi par
-# l'utilisateur) sur la permission ".main" d'une instance "redirect" créée
-# par cette app — la règle ci-dessous n'autorise plus que ça, exactement.
+# Tightened on 2026-07-17: this rule used to be `yunohost user permission
+# update *`, a total wildcard on a command that can also CHANGE THE GROUP
+# of any permission on the server (--add/--remove a group) — far more
+# dangerous than a simple logo if the Flask process were ever compromised
+# (e.g. injection in a field). The only real use in the code is applying
+# the Docker Gate logo (a fixed file, never chosen by the user) to the
+# ".main" permission of a "redirect" instance created by this app — the
+# rule below now allows exactly that, and nothing more.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/yunohost user permission update *.main --logo /opt/yunohost/__APP__/static/docker-gate-app-logo.png
-# Désinstallation de Docker CE depuis la page Audit (18/07/2026) : couvre le
-# cas où Docker Gate est désinstallé via le panneau d'administration
-# YunoHost (aucun terminal attaché, la question interactive de
-# scripts/remove ne peut jamais s'afficher dans ce cas — voir
-# ynh_manager.uninstall_docker_ce). Chaque commande est fixe, aucun joker
-# au-delà du strict nécessaire.
+# Uninstalling Docker CE from the Audit page (2026-07-18): covers the case
+# where Docker Gate is uninstalled via the YunoHost admin panel (no
+# terminal attached, so the interactive question in scripts/remove can
+# never appear in that case — see ynh_manager.uninstall_docker_ce). Each
+# command is fixed, no wildcard beyond the strict necessary.
 __APP__ ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker docker.socket containerd
 __APP__ ALL=(root) NOPASSWD: /usr/bin/apt-get purge -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin containerd.io
 __APP__ ALL=(root) NOPASSWD: /usr/bin/apt-get autoremove -y

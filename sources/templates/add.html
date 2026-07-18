@@ -15,11 +15,11 @@
   <details style="margin-top:0.6rem;">
     <summary style="cursor:pointer; font-size:0.85rem; color:var(--color-text-dim);">{{ t('import_file_or_url') }}</summary>
     <div style="margin:0.6rem 0;">
-      <!-- Le <input type="file"> natif affiche un libellé de bouton fourni
-           par le NAVIGATEUR lui-même selon sa langue système ("Choisir un
-           fichier"/"Choose file"), impossible à traduire depuis la page
-           (constaté le 15/07/2026, testé en direct par Patrick). Masqué et
-           remplacé par notre propre bouton, déclenché en JS. -->
+      <!-- The native <input type="file"> shows a button label provided by
+           the BROWSER itself based on its system language ("Choose
+           file"/"Choisir un fichier"), impossible to translate from the
+           page (observed on 2026-07-15, tested live by Patrick). Hidden
+           and replaced with our own button, triggered via JS. -->
       <input type="file" id="compose_file" accept=".yml,.yaml,.txt" onchange="loadComposeFile(event)" style="display:none;">
       <button type="button" class="btn" onclick="document.getElementById('compose_file').click()">{{ t('btn_choose_file') }}</button>
       <span id="compose_file_name" style="margin-left:0.5rem; color:var(--color-text-dim); font-size:0.85rem;">{{ t('no_file_chosen') }}</span>
@@ -346,9 +346,9 @@ function analyze() {
     });
 }
 
-// Constructeurs de messages paramétrés (évite de dupliquer les traductions
-// côté JS — un seul point de vérité par clé dans i18n.py, rendu ici via
-// des gabarits Jinja déjà traduits pour la langue courante).
+// Parameterized message builders (avoids duplicating translations on the
+// JS side — a single source of truth per key in i18n.py, rendered here via
+// Jinja templates already translated for the current language).
 MSG.pathAvailable = function(address) {
   return {{ t('js_path_available', address='__ADDR__')|tojson }}.replace('__ADDR__', address);
 };

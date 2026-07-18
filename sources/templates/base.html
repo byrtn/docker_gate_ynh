@@ -6,9 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   :root {
-    /* Thème "Docker Gate" (chantier 3, 16/07/2026) — repris à l'identique de
-       docs/02-wappos/docker_gate_ynh/design/docker-gate-mockup-accueil.html,
-       tokens de couleur/rayon volontairement fixes (pas d'improvisation). */
+    /* "Docker Gate" theme (workstream 3, 2026-07-16) — copied identically
+       from docs/02-wappos/docker_gate_ynh/design/docker-gate-mockup-accueil.html,
+       color/radius tokens deliberately fixed (no improvising). */
     --color-bg: #F7F7F5;
     --color-bg-pure: #FFFFFF;
     --color-primary: #041226;
@@ -20,8 +20,8 @@
     --color-border: #E6E4DF;
     --color-danger: #DE2C13;
     --color-success: #1A7D43;
-    /* Tokens ambre (chantier 3-bis, page /audit) — états d'avertissement
-       "résidus détectés", distincts du rouge (destructif) et du vert (propre). */
+    /* Amber tokens (workstream 3-bis, /audit page) — "residue detected"
+       warning states, distinct from red (destructive) and green (clean). */
     --color-warning: #B8760A;
     --color-warning-soft: #F7ECD9;
     --radius-card: 14px;
@@ -37,8 +37,8 @@
   }
   .wrap { max-width: 720px; margin: 0 auto; position: relative; }
 
-  /* --- Header : logo + triangle (motif repris du logo Docker Gate,
-     chantier 1) + sélecteur de langue --- */
+  /* --- Header: logo + triangle (pattern taken from the Docker Gate logo,
+     workstream 1) + language switcher --- */
   .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
   .app-header .logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; color: var(--color-primary); }
   .tri { width: 0.65rem; height: 0.65rem; background: var(--color-accent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); display: inline-block; flex-shrink: 0; }
@@ -59,12 +59,12 @@
     margin-bottom: 1.25rem;
     text-align: center;
   }
-  /* Sous-ligne de tagline (17/07/2026) — jamais traduite, comme "Docker
-     Gate" — casse volontairement conservée (pas d'uppercase hérité).
-     Taille laissee inchangee (demande explicite de Patrick, 17/07/2026
-     soir) quand "Docker Gate" ci-dessus est repasse en grand -- valeur
-     em recalculee en absolu (0.85rem) pour ne pas suivre le nouveau
-     font-size de son parent .eyebrow. */
+  /* Tagline sub-line (2026-07-17) — never translated, same as "Docker
+     Gate" — casing deliberately kept as-is (no inherited uppercase).
+     Size left unchanged (explicit request from Patrick, evening of
+     2026-07-17) when "Docker Gate" above went back to being large —
+     em value recomputed as an absolute (0.85rem) so it doesn't follow
+     its .eyebrow parent's new font-size. */
   .eyebrow-sub {
     display: block;
     font-size: 0.85rem;
@@ -77,8 +77,8 @@
   h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1.25rem; text-align: center; color: var(--color-primary); }
   p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2.25rem; }
 
-  /* --- Boutons : secondaire (contour navy, par défaut) / primaire (rouge
-     plein, action principale) --- */
+  /* --- Buttons: secondary (navy outline, default) / primary (solid red,
+     main action) --- */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -102,13 +102,13 @@
   .btn-danger.btn-armed { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
   .center { text-align: center; margin: 2rem 0; }
 
-  /* --- Séparateur "ligne navy — texte — ligne rouge", motif du logo --- */
+  /* --- "Navy line — text — red line" divider, logo pattern --- */
   .divider { display: flex; align-items: center; gap: 0.9rem; margin: 2.5rem 0 1.4rem; }
   .divider .line { flex: 0 0 2.5rem; height: 2px; background: var(--color-primary); }
   .divider .line.red { background: var(--color-accent); flex: 1; }
   .divider span { font-size: 0.75rem; letter-spacing: 0.12em; color: var(--color-text-dim); text-transform: uppercase; white-space: nowrap; }
 
-  /* --- Cartes génériques (liste /audit, inchangées structurellement) --- */
+  /* --- Generic cards (/audit list, structurally unchanged) --- */
   .card {
     background: var(--color-bg-pure);
     border: 1px solid var(--color-border);
@@ -267,19 +267,19 @@
   .footer a:hover { text-decoration: underline; }
   a { color: var(--color-primary-2); }
 
-  /* Robustesse mobile (chantier 2, 16/07/2026) : un peu moins de marge
-     latérale sous 480px pour redonner de la largeur utile au contenu
-     (formulaires, cartes) sans rien casser — aucun débordement constaté
-     avant ce changement, ceci est un raffinement, pas un correctif. */
+  /* Mobile robustness (workstream 2, 2026-07-16): slightly less side
+     margin under 480px to give back useful width to content (forms,
+     cards) without breaking anything — no overflow observed before this
+     change, this is a refinement, not a fix. */
   @media (max-width: 480px) {
     body { padding: 2.5rem 1.1rem 4rem; }
     .card { padding: 1.2rem 1.3rem; }
     .mode-block { padding: 1rem; }
   }
 
-  /* Barre d'actions fixe en bas d'écran sur mobile (page d'accueil
-     uniquement, chantier 3) — le HTML de .bottom-bar n'est présent que
-     dans index.html, ces règles restent inertes ailleurs. */
+  /* Fixed action bar at the bottom of the screen on mobile (home page
+     only, workstream 3) — the .bottom-bar HTML only exists in index.html,
+     these rules stay inert elsewhere. */
   @media (max-width: 600px) {
     .actions { display: none; }
     .bottom-bar {
@@ -322,10 +322,10 @@
 <script>
 const CONFIRM_LABEL = {{ t('btn_confirm')|tojson }};
 
-// Armement à deux clics pour les boutons de suppression (remplace confirm(),
-// bloquant et non automatisable). Premier clic : affiche le message et arme
-// le bouton pendant quelques secondes. Second clic dans ce délai : soumet
-// réellement le formulaire.
+// Two-click arming for delete buttons (replaces confirm(), which is
+// blocking and can't be automated). First click: shows the message and
+// arms the button for a few seconds. Second click within that window:
+// actually submits the form.
 function armDelete(btn, message) {
   if (btn.dataset.armed === '1') {
     return true;

@@ -1,22 +1,22 @@
 """
-Docker Gate — module de gestion Docker + YunoHost.
+Docker Gate — Docker + YunoHost management module.
 
-Étape 2 (11/07/2026) : logique réelle de création/suppression d'apps Docker
-exposées derrière YunoHost, dans les deux modes (chemin et sous-domaine dédié).
+Step 2 (2026-07-11): the real logic for creating/removing Docker apps
+exposed behind YunoHost, in both modes (path and dedicated subdomain).
 
-Principe de sécurité (voir manifest.toml + conf/docker_gate.sudoers) :
-ce module tourne avec un utilisateur système restreint. Les seules commandes
-privilégiées (yunohost app install/remove, domain add/cert install) passent
-par `sudo -n`, autorisées de façon ciblée par le fichier sudoers posé à
-l'installation — jamais de sudo générique.
+Security principle (see manifest.toml + conf/docker_gate.sudoers): this
+module runs under a restricted system user. The only privileged commands
+(yunohost app install/remove, domain add/cert install) go through
+`sudo -n`, narrowly authorized by the sudoers file laid down at install
+time — never generic sudo.
 
-Internationalisation (15/07/2026) : tous les messages utilisateur (erreurs,
-avertissements) passent par `i18n.t(key, lang, **kwargs)` — `lang` est un
-paramètre explicite de chaque fonction plutôt qu'un contexte Flask implicite,
-pour que ce module reste testable indépendamment de Flask et pour gérer
-correctement le cas d'une création lancée en tâche de fond (thread séparé de
-la requête HTTP d'origine, voir app.py) : la langue de l'utilisateur est
-capturée avant le lancement du thread, jamais déduite après coup.
+Internationalization (2026-07-15): all user-facing messages (errors,
+warnings) go through `i18n.t(key, lang, **kwargs)` — `lang` is an explicit
+parameter of every function rather than implicit Flask context, so this
+module stays testable independently of Flask and to correctly handle the
+case of a creation launched as a background task (a thread separate from
+the original HTTP request, see app.py): the user's language is captured
+before the thread starts, never inferred afterwards.
 """
 import json
 import os
@@ -38,26 +38,25 @@ DATA_FILE = Path(__file__).parent / "data" / "apps.json"
 PORT_RANGE_START = 9100
 PORT_RANGE_END = 9999
 
-# Logo appliqué sur chaque conteneur exposé via "redirect" (chantier 1,
-# 16/07/2026) — mêmes 2 mécanismes YunoHost que pour Docker Gate lui-même
-# (voir scripts/install), appliqués ici sur l'instance "redirect" créée.
+# Logo applied to every container exposed via "redirect" (workstream 1,
+# 2026-07-16) — same 2 YunoHost mechanisms as for Docker Gate itself (see
+# scripts/install), applied here to the created "redirect" instance.
 CHILD_LOGO_SOURCE = Path(__file__).parent / "static" / "docker-gate-app-logo.png"
 
 docker_client = docker.from_env()
 
 
 class DockerConnectorError(Exception):
-    """Erreur métier lisible, affichée telle quelle à l'utilisateur."""
+    """Readable business-logic error, shown as-is to the user."""
 
 
 def _load_state():
-    """Audit chantier 5 (17/07/2026, cas limites) : avant ce correctif, un
-    `data/apps.json` corrompu (écriture interrompue par un disque plein, un
-    crash, ou une édition manuelle ratée) faisait planter TOUTE l'interface
-    (chaque route appelle cette fonction). Un fichier illisible est
-    maintenant mis de côté (jamais supprimé — conservé pour investigation/
-    récupération manuelle) et remplacé par un état vide, pour que l'app
-    reste utilisable plutôt que totalement indisponible."""
+    """Audit workstream 5 (2026-07-17, edge cases): before this fix, a
+    corrupted `data/apps.json` (write interrupted by a full disk, a crash,
+    or a failed manual edit) crashed the WHOLE interface (every route calls
+    this function). An unreadable file is now set aside (never deleted —
+    kept for investigation/manual recovery) and replaced with an empty
+    state, so the app stays usable instead of fully unavailable."""
     if not DATA_FILE.exists():
         return []
     try:
@@ -73,11 +72,11 @@ def _load_state():
 
 
 def _save_state(apps):
-    """Écriture atomique (audit chantier 5, 17/07/2026) : écrit dans un
-    fichier temporaire puis `os.replace()` (renommage atomique sur un même
-    système de fichiers) plutôt que d'écrire directement dans `apps.json` —
-    une interruption en cours d'écriture (crash, disque plein) ne peut plus
-    laisser un fichier à moitié écrit et donc invalide pour `_load_state()`."""
+    """Atomic write (audit workstream 5, 2026-07-17): writes to a temporary
+    file then `os.replace()` (atomic rename on the same filesystem) rather
+    than writing directly into `apps.json` — an interruption mid-write
+    (crash, full disk) can no longer leave a half-written, and therefore
+    invalid, file for `_load_state()`."""
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=DATA_FILE.parent, prefix=".apps-", suffix=".json.tmp")
     try:
@@ -94,26 +93,26 @@ def _save_state(apps):
 
 def list_apps(lang="en"):
     apps = _load_state()
-    # Rétrocompatibilité (audit 17/07/2026) : les apps créées avant le
-    # passage au modèle à 3 groupes n'ont qu'un booléen "public" en état
-    # disque — déduit ici à la lecture, jamais réécrit, comportement réel
-    # inchangé pour ces apps existantes.
+    # Backward compatibility (audit 2026-07-17): apps created before the
+    # switch to the 3-group model only have a "public" boolean on disk —
+    # inferred here on read, never rewritten, real behavior unchanged for
+    # these existing apps.
     for a in apps:
         if "visibility" not in a:
             a["visibility"] = "visitors" if a.get("public") else "admins"
 
-    # Réconciliation avec l'état réel YunoHost (bug trouvé le 18/07/2026) :
-    # si une app enfant est supprimée directement depuis le panneau
-    # d'administration YunoHost (en contournant Docker Gate), notre fichier
-    # d'état ne le sait jamais tout seul et continuait de l'afficher comme
-    # fonctionnelle alors que sa permission SSO/conf nginx n'existe plus.
-    # Vérifié à chaque affichage : toute entrée dont le yunohost_app_id ne
-    # correspond plus à une app YunoHost réelle est retirée de l'état — le
-    # conteneur Docker restant (le cas échéant) redevient détectable comme
-    # résidu via /audit, qui sait déjà le gérer proprement. Aucune donnée
-    # n'est perdue ici : seul le suivi devenu faux est corrigé, la
-    # suppression réelle du conteneur/volume reste soumise aux mêmes
-    # garde-fous que d'habitude (page Audit & nettoyage).
+    # Reconciliation with real YunoHost state (bug found on 2026-07-18): if
+    # a child app is removed directly from the YunoHost admin panel
+    # (bypassing Docker Gate), our state file never finds out on its own
+    # and kept showing it as functional even though its SSO
+    # permission/nginx config no longer exists. Checked on every page
+    # load: any entry whose yunohost_app_id no longer matches a real
+    # YunoHost app is dropped from the state — the remaining Docker
+    # container (if any) becomes detectable again as residue via /audit,
+    # which already knows how to handle it properly. No data is lost
+    # here: only the now-wrong tracking is fixed, the actual removal of
+    # the container/volume remains subject to the same safeguards as usual
+    # (Audit & cleanup page).
     try:
         real_ids = {
             a["id"]
@@ -126,8 +125,8 @@ def list_apps(lang="en"):
             apps = still_valid
             _save_state(apps)
     except (DockerConnectorError, ValueError, KeyError):
-        # Best-effort : si la vérification échoue (sudo, JSON invalide...),
-        # on affiche l'état tel quel plutôt que de casser la page d'accueil.
+        # Best-effort: if the check fails (sudo, invalid JSON...), show the
+        # state as-is rather than breaking the home page.
         pass
 
     return apps
@@ -142,10 +141,9 @@ def _slug_already_used(slug):
 
 
 def _pick_free_port(lang):
-    """Choisit un port libre dans la plage 9100-9999, en vérifiant à la fois
-    notre fichier d'état ET les ports réellement utilisés par Docker (pour ne
-    jamais entrer en collision avec une app installée manuellement, comme
-    Portainer sur 9101)."""
+    """Picks a free port in the 9100-9999 range, checking both our state
+    file AND the ports actually used by Docker (to never collide with a
+    manually installed app, like Portainer on 9101)."""
     used = {a["host_port"] for a in _load_state()}
 
     for container in docker_client.containers.list(all=True):
@@ -166,9 +164,9 @@ def _pick_free_port(lang):
 
 
 def _run_sudo(args, error_message, lang):
-    """Exécute une commande sudo -n (non-interactive), autorisée par le
-    fichier sudoers scellé. Lève DockerConnectorError avec un message lisible
-    en cas d'échec, plutôt que de laisser fuiter une trace brute à l'écran."""
+    """Runs a sudo -n (non-interactive) command, authorized by the sealed
+    sudoers file. Raises DockerConnectorError with a readable message on
+    failure, rather than letting a raw trace leak onto the screen."""
     result = subprocess.run(
         ["/usr/bin/sudo", "-n"] + args,
         capture_output=True,
@@ -183,8 +181,8 @@ def _run_sudo(args, error_message, lang):
 
 
 def existing_domains(lang):
-    """Liste les domaines déjà connus de YunoHost (pour peupler le menu
-    déroulant du mode 'chemin')."""
+    """Lists domains already known to YunoHost (to populate the dropdown
+    for the 'path' mode)."""
     output = _run_sudo(
         ["yunohost", "domain", "list", "--output-as", "json"],
         t("err_list_domains", lang),
@@ -195,11 +193,11 @@ def existing_domains(lang):
 
 
 def fetch_compose_from_url(url, lang):
-    """Récupère le contenu d'un docker-compose.yml depuis une URL fournie
-    par l'utilisateur (ex: lien GitHub brut). Restreint à https:// — cette
-    app a déjà des droits élevés sur le serveur (sudo ciblé), donc le risque
-    marginal d'une requête sortante n'ajoute rien de nouveau, mais on refuse
-    quand même http:// en clair par hygiène de base."""
+    """Fetches the content of a docker-compose.yml from a URL provided by
+    the user (e.g. a raw GitHub link). Restricted to https:// — this app
+    already has elevated rights on the server (targeted sudo), so the
+    marginal risk of an outgoing request adds nothing new, but plain
+    http:// is refused anyway as basic hygiene."""
     if not url.startswith("https://"):
         raise DockerConnectorError(t("err_https_only", lang))
     try:
@@ -213,13 +211,12 @@ def fetch_compose_from_url(url, lang):
 
 
 def inspect_docker_image(image_name, lang):
-    """Télécharge (si besoin) et inspecte une image Docker pour deviner
-    automatiquement son port et son volume par défaut, quand l'utilisateur
-    ne donne qu'un nom d'image (le cas le moins informatif des trois formats
-    acceptés). Best-effort : beaucoup d'images ne déclarent pas ces
-    informations dans leurs métadonnées (seulement dans leur documentation
-    en texte libre) — dans ce cas on ne remplit que ce qu'on a pu trouver,
-    jamais de valeur inventée."""
+    """Downloads (if needed) and inspects a Docker image to automatically
+    guess its default port and volume, when the user only gives an image
+    name (the least informative of the three accepted formats).
+    Best-effort: many images don't declare this information in their
+    metadata (only in their free-text documentation) — in that case only
+    what could be found is filled in, never a made-up value."""
     try:
         image = docker_client.images.pull(image_name)
     except docker.errors.APIError as e:
@@ -230,27 +227,27 @@ def inspect_docker_image(image_name, lang):
 
     exposed_ports = config.get("ExposedPorts") or {}
     if exposed_ports:
-        # Format Docker : {"80/tcp": {}, "443/tcp": {}} — on prend le premier.
+        # Docker format: {"80/tcp": {}, "443/tcp": {}} — take the first one.
         first_port = next(iter(exposed_ports))
         result["container_port"] = first_port.split("/")[0]
 
     volumes = config.get("Volumes") or {}
     if volumes:
-        # Format Docker : {"/data": {}} — on prend le premier déclaré.
+        # Docker format: {"/data": {}} — take the first one declared.
         result["data_path"] = next(iter(volumes))
 
     return result
 
 
 def parse_docker_run_command(text, lang):
-    """Parse une commande `docker run ...` (celle qu'on trouve typiquement
-    sur Docker Hub/GitHub) et en extrait image/port/données/variables —
-    sans passer par un docker-compose.yml. Gère les commandes étalées sur
-    plusieurs lignes avec des '\\' de continuation (format habituel des
-    tutoriels). Philosophie changée le 13/07/2026 à la demande de Patrick :
-    l'utilisateur donne UNE SEULE entrée brute (image, commande docker run,
-    ou docker-compose.yml), jamais une liste de champs à remplir à la main."""
-    # Rejoint les lignes coupées par '\' en fin de ligne (continuation shell).
+    """Parses a `docker run ...` command (the kind typically found on
+    Docker Hub/GitHub) and extracts image/port/data/variables from it —
+    without going through a docker-compose.yml. Handles commands spread
+    over multiple lines with '\\' continuations (the usual tutorial
+    format). Philosophy changed on 2026-07-13 at Patrick's request: the
+    user gives ONE SINGLE raw input (image, docker run command, or
+    docker-compose.yml), never a list of fields to fill in by hand."""
+    # Joins lines split by a trailing '\' (shell continuation).
     joined = re.sub(r"\\\s*\n", " ", text)
     joined = joined.replace("\n", " ").strip()
     if not joined.startswith("docker "):
@@ -283,12 +280,12 @@ def parse_docker_run_command(text, lang):
         if tok in ("-v", "--volume") and i + 1 < len(tokens):
             parts = tokens[i + 1].split(":")
             if len(parts) >= 2 and not parts[0].startswith("/"):
-                # Volume nommé (rare en ligne de commande, mais possible).
+                # Named volume (rare on the command line, but possible).
                 result["data_path"] = parts[1]
             elif len(parts) >= 2:
-                # Montage d'un chemin hôte (le cas le plus courant en CLI,
-                # ex: -v /vw-data/:/data/) — on veut quand même le chemin
-                # À L'INTÉRIEUR du conteneur, donc la partie après le ':'.
+                # Host path mount (the most common CLI case, e.g.
+                # -v /vw-data/:/data/) — we still want the path INSIDE the
+                # container, i.e. the part after the ':'.
                 result["data_path"] = parts[1]
             i += 2
             continue
@@ -298,16 +295,16 @@ def parse_docker_run_command(text, lang):
             i += 2
             continue
         if tok.startswith("-"):
-            # Option non reconnue (--name, --restart, -d...) : on l'ignore,
-            # avec son éventuel argument s'il n'est pas collé (ex: --name X).
-            # Heuristique simple : si le token suivant ne commence pas par
-            # '-' et n'est pas l'image (dernier token), on le saute aussi.
+            # Unrecognized option (--name, --restart, -d...): ignored,
+            # along with its argument if not glued to it (e.g. --name X).
+            # Simple heuristic: if the next token doesn't start with '-'
+            # and isn't the image (last token), skip it too.
             if i + 1 < len(tokens) and not tokens[i + 1].startswith("-") and i + 1 != len(tokens) - 1:
                 i += 2
             else:
                 i += 1
             continue
-        # Ce qui reste est l'image (dernier token positionnel).
+        # What's left is the image (last positional token).
         image = tok
         i += 1
 
@@ -330,11 +327,11 @@ def parse_docker_run_command(text, lang):
 
 
 def smart_parse_input(text, lang):
-    """Point d'entrée unique : détecte automatiquement ce que l'utilisateur
-    a collé — une commande 'docker run', un docker-compose.yml, ou juste un
-    nom d'image — et appelle le bon analyseur. Philosophie "zero-formulaire"
-    actée le 13/07/2026 : une seule case à remplir, pas trois formats
-    différents à choisir soi-même."""
+    """Single entry point: automatically detects what the user pasted — a
+    'docker run' command, a docker-compose.yml, or just an image name —
+    and calls the right parser. "Zero-form" philosophy decided on
+    2026-07-13: one single box to fill in, not three different formats to
+    choose between yourself."""
     stripped = text.strip()
     if not stripped:
         raise DockerConnectorError(t("err_nothing_to_analyze", lang))
@@ -342,13 +339,13 @@ def smart_parse_input(text, lang):
     if stripped.startswith("docker "):
         return parse_docker_run_command(stripped, lang)
 
-    # Un docker-compose.yml contient presque toujours au moins un retour à
-    # la ligne et une structure "services:" ou "image:". Un simple nom
-    # d'image, lui, tient sur une seule ligne sans ':' suivi d'espace.
+    # A docker-compose.yml almost always contains at least one line break
+    # and a "services:" or "image:" structure. A plain image name, on the
+    # other hand, fits on a single line without a ':' followed by a space.
     if "\n" in stripped or stripped.lstrip().startswith(("services:", "image:")):
         return parse_compose_snippet(stripped, lang)
 
-    # Sinon : probablement juste un nom d'image (ex: "vaultwarden/server:latest").
+    # Otherwise: probably just an image name (e.g. "vaultwarden/server:latest").
     if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/-]*(:[a-zA-Z0-9._-]+)?", stripped):
         return inspect_docker_image(stripped, lang)
 
@@ -356,16 +353,15 @@ def smart_parse_input(text, lang):
 
 
 def parse_compose_snippet(text, lang):
-    """Extrait image/port/données d'un extrait docker-compose.yml collé par
-    l'utilisateur — beaucoup de projets self-hosted en publient un tout prêt
-    (contrairement au reste de leur doc, souvent en texte libre, ce format
-    est structuré et fiable à lire automatiquement).
+    """Extracts image/port/data from a docker-compose.yml snippet pasted by
+    the user — many self-hosted projects publish a ready-made one (unlike
+    the rest of their docs, often free-text, this format is structured and
+    reliable to parse automatically).
 
-    Accepte aussi bien un fichier complet (avec une clé `services:`) qu'un
-    simple extrait du bloc d'un seul service. Ne remplit QUE ce qu'il trouve
-    — à l'utilisateur de compléter le reste si besoin, pas d'invention de
-    valeurs par défaut hasardeuses (règle #1 : jamais d'affirmation qui ne
-    soit pas vérifiée)."""
+    Accepts both a full file (with a `services:` key) and a plain snippet
+    of a single service's block. Only fills in what it finds — it's up to
+    the user to complete the rest if needed, no invented defaults out of
+    thin air (rule #1: never state something that hasn't been verified)."""
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as e:
@@ -380,8 +376,8 @@ def parse_compose_snippet(text, lang):
             raise DockerConnectorError(t("err_no_service_found", lang))
         service_key, service = next(iter(services.items()))
     else:
-        # Peut-être un simple extrait (juste le bloc d'un service, sans la
-        # clé "services:" englobante).
+        # Might be a plain snippet (just a service's block, without the
+        # enclosing "services:" key).
         service = data
         service_key = None
 
@@ -397,7 +393,7 @@ def parse_compose_snippet(text, lang):
     ports = service.get("ports")
     if ports and isinstance(ports, list) and ports:
         first = str(ports[0])
-        # Formats possibles : "3001", "3001:3001", "127.0.0.1:3001:3001"
+        # Possible formats: "3001", "3001:3001", "127.0.0.1:3001:3001"
         result["container_port"] = first.split(":")[-1]
 
     volumes = service.get("volumes")
@@ -408,11 +404,11 @@ def parse_compose_snippet(text, lang):
             if len(parts) < 2:
                 continue
             source = parts[0]
-            # On ignore les montages spéciaux de l'hôte (chemin absolu en
-            # source, ex: /var/run/docker.sock) — ce ne sont pas des volumes
-            # de données classiques, juste prendre "le premier trouvé" donnait
-            # de mauvais résultats sur de vrais fichiers (ex: Portainer,
-            # dont le premier volume est le socket Docker, pas les données).
+            # Ignore special host mounts (absolute path as the source, e.g.
+            # /var/run/docker.sock) — these aren't ordinary data volumes,
+            # just taking "the first one found" gave bad results on real
+            # files (e.g. Portainer, whose first volume is the Docker
+            # socket, not its data).
             if source.startswith("/"):
                 continue
             result["data_path"] = parts[1]
@@ -420,8 +416,8 @@ def parse_compose_snippet(text, lang):
 
     environment = service.get("environment")
     if environment:
-        # Le format docker-compose accepte deux syntaxes équivalentes :
-        # une liste ["CLE=valeur", ...] ou un dictionnaire {CLE: valeur}.
+        # The docker-compose format accepts two equivalent syntaxes: a
+        # list ["KEY=value", ...] or a dict {KEY: value}.
         pairs = []
         if isinstance(environment, list):
             for e in environment:
@@ -430,12 +426,12 @@ def parse_compose_snippet(text, lang):
         elif isinstance(environment, dict):
             pairs = [(str(k), str(v)) for k, v in environment.items()]
 
-        # On repère une éventuelle variable "d'URL de base" (valeur qui
-        # ressemble à une adresse web, ex: DOMAIN=https://vw.domain.tld) —
-        # cette variable-là n'a pas besoin d'être recopiée telle quelle : sa
-        # vraie valeur sera calculée automatiquement à partir du domaine et
-        # du chemin choisis dans le formulaire (simplification demandée par
-        # Patrick le 13/07/2026, pour éviter une double saisie manuelle).
+        # Spot a possible "base URL" variable (a value that looks like a
+        # web address, e.g. DOMAIN=https://vw.domain.tld) — this variable
+        # doesn't need to be copied as-is: its real value will be computed
+        # automatically from the domain and path chosen in the form
+        # (simplification requested by Patrick on 2026-07-13, to avoid
+        # entering it twice by hand).
         other_lines = []
         for key, value in pairs:
             if not result["url_env_var"] and re.match(r"^https?://", value):
@@ -452,12 +448,11 @@ def parse_compose_snippet(text, lang):
 
 
 def parse_env_vars_text(text, lang):
-    """Parse un texte au format 'CLE=valeur' (une par ligne, comme un fichier
-    .env) en dictionnaire. Ignore les lignes vides et les commentaires
-    (lignes commençant par #). Lève une erreur claire si une ligne non-vide
-    ne contient pas de '=' (règle #1 : jamais d'échec silencieux — mieux
-    vaut prévenir l'utilisateur qu'ignorer silencieusement une ligne mal
-    formée qui pourrait être importante pour l'app)."""
+    """Parses a 'KEY=value' text (one per line, like a .env file) into a
+    dict. Ignores empty lines and comments (lines starting with #). Raises
+    a clear error if a non-empty line doesn't contain an '=' (rule #1:
+    never fail silently — better to warn the user than silently ignore a
+    malformed line that could matter to the app)."""
     env = {}
     for i, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
@@ -471,17 +466,16 @@ def parse_env_vars_text(text, lang):
 
 
 def build_create_steps(mode, has_data):
-    """Construit la liste ordonnée des CLÉS d'étapes prévues pour une
-    création, selon le mode et si des données persistantes sont demandées.
-    Utilisée à la fois pour préparer l'affichage de la progression ET par
-    create_docker_app pour signaler son avancement réel — les deux ne
-    peuvent donc jamais être désynchronisés.
+    """Builds the ordered list of planned step KEYS for a creation,
+    depending on the mode and whether persistent data was requested. Used
+    both to prepare the progress display AND by create_docker_app to
+    report its real progress — the two can therefore never fall out of
+    sync.
 
-    Retourne des clés stables (i18n.STRINGS), jamais du texte affichable
-    directement — la traduction se fait à l'affichage (progress.html),
-    jamais ici (ces clés doivent rester indépendantes de la langue de
-    l'utilisateur, y compris pour matcher le job de progression, voir
-    progress.py)."""
+    Returns stable keys (i18n.STRINGS), never directly displayable text —
+    translation happens at display time (progress.html), never here (these
+    keys must stay independent of the user's language, including to match
+    the progress job, see progress.py)."""
     steps = ["step_check_params", "step_pick_port"]
     if mode == "subdomain":
         steps += [
@@ -498,18 +492,18 @@ def build_create_steps(mode, has_data):
 
 
 def check_subdomain_status(new_subdomain, domain_parent, lang):
-    """Vérifie l'état d'un sous-domaine potentiel AVANT toute tentative de
-    création, pour donner un retour clair et non-bloquant à l'utilisateur
-    (demande de Patrick, 13/07/2026) plutôt que de découvrir le problème
-    après coup via une erreur YunoHost.
+    """Checks the state of a potential subdomain BEFORE any creation
+    attempt, to give the user clear, non-blocking feedback (Patrick's
+    request, 2026-07-13) rather than discovering the problem afterwards
+    via a YunoHost error.
 
-    Retourne un dict avec "status" valant :
-    - "free" : n'existe pas, création possible
-    - "exists_empty" : existe déjà mais sans app installée dessus — peut
-      être réutilisé tel quel (cas d'un essai précédent interrompu, ex:
-      certificat qui avait échoué)
-    - "exists_used" : existe déjà AVEC une app dessus — jamais réutilisable,
-      proposer un nom alternatif plutôt que de bloquer sans solution
+    Returns a dict with "status" being:
+    - "free": doesn't exist, creation possible
+    - "exists_empty": already exists but with no app installed on it — can
+      be reused as-is (case of a previous interrupted attempt, e.g. a
+      certificate that had failed)
+    - "exists_used": already exists WITH an app on it — never reusable,
+      suggest an alternative name rather than blocking with no way out
     """
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,62}", new_subdomain or ""):
         return {"status": "invalid"}
@@ -529,8 +523,8 @@ def check_subdomain_status(new_subdomain, domain_parent, lang):
         info = json.loads(info_raw)
         apps_on_domain = info.get("apps", [])
     except DockerConnectorError:
-        # Prudence : si on n'arrive pas à vérifier, on considère occupé
-        # plutôt que de risquer d'écraser quelque chose (règle #1).
+        # Caution: if it can't be verified, treat it as occupied rather
+        # than risk overwriting something (rule #1).
         apps_on_domain = ["?"]
 
     if apps_on_domain:
@@ -541,11 +535,11 @@ def check_subdomain_status(new_subdomain, domain_parent, lang):
 
 
 def check_path_status(domain, path, lang):
-    """Vérifie si domain+path est déjà occupé par une app YunoHost existante,
-    AVANT la tentative de création — même logique préventive que
-    check_subdomain_status pour le mode "sous-domaine dédié" (parité UX,
-    15/07/2026 : le mode "chemin" n'avait jusqu'ici aucun contrôle
-    équivalent, l'échec ne remontait qu'à l'étape finale d'exposition)."""
+    """Checks whether domain+path is already occupied by an existing
+    YunoHost app, BEFORE the creation attempt — same preventive logic as
+    check_subdomain_status for the "dedicated subdomain" mode (UX parity,
+    2026-07-15: the "path" mode had no equivalent check until then, the
+    failure only surfaced at the final exposure step)."""
     normalized_path = path if path.startswith("/") else f"/{path}"
     if not re.fullmatch(r"/[a-zA-Z0-9._~-]*(?:/[a-zA-Z0-9._~-]+)*", normalized_path):
         return {"status": "invalid"}
@@ -567,70 +561,70 @@ def check_path_status(domain, path, lang):
 
 
 def create_docker_app(slug, image, container_port, mode, domain, domain_parent, path, new_subdomain, visibility, lang, data_path="", env_vars=None, url_env_var="", reuse_existing_domain=False, on_step=None):
-    """Point d'entrée principal de la création d'une app Docker exposée.
+    """Main entry point for creating an exposed Docker app.
 
-    mode: "path" ou "subdomain"
-    - path      : expose sur {domain}{path}
-    - subdomain : crée {new_subdomain}.{domain_parent}, expose à la racine
+    mode: "path" or "subdomain"
+    - path      : exposes at {domain}{path}
+    - subdomain : creates {new_subdomain}.{domain_parent}, exposes at the root
 
-    domain_parent est un champ DISTINCT de domain (deux menus déroulants
-    séparés dans le formulaire, un par mode) — ne jamais les confondre,
-    incident déjà rencontré et corrigé le 12/07/2026.
+    domain_parent is a DISTINCT field from domain (two separate dropdowns
+    in the form, one per mode) — never mix them up, an incident already
+    encountered and fixed on 2026-07-12.
 
-    lang : langue de l'utilisateur ayant lancé la création, capturée dans la
-    requête HTTP d'origine (voir app.py) — la création tourne dans un thread
-    séparé, sans accès direct au contexte Flask/session, d'où ce paramètre
-    explicite plutôt qu'une déduction implicite (15/07/2026, i18n).
+    lang: the language of the user who launched the creation, captured
+    from the original HTTP request (see app.py) — creation runs in a
+    separate thread, with no direct access to Flask/session context, hence
+    this explicit parameter rather than an implicit inference (2026-07-15,
+    i18n).
 
-    data_path (optionnel) : chemin À L'INTÉRIEUR du conteneur où l'app range
-    ses données persistantes (ex: "/app/data" pour Uptime Kuma — voir la
-    documentation de l'app sur Docker Hub). Si fourni, un volume Docker
-    nommé et dédié est créé et monté à cet endroit, pour que les données
-    survivent à un redémarrage ou une recréation du conteneur.
+    data_path (optional): path INSIDE the container where the app stores
+    its persistent data (e.g. "/app/data" for Uptime Kuma — see the app's
+    documentation on Docker Hub). If provided, a dedicated named Docker
+    volume is created and mounted there, so the data survives a container
+    restart or recreation.
 
-    on_step (optionnel) : fonction appelée avec la CLÉ de chaque étape au
-    moment où elle démarre (voir build_create_steps et progress.py) —
-    permet à l'interface d'afficher une progression détaillée pendant les
-    opérations longues (téléchargement d'image, certificat Let's Encrypt).
+    on_step (optional): function called with the KEY of each step as it
+    starts (see build_create_steps and progress.py) — lets the interface
+    show detailed progress during long operations (image download, Let's
+    Encrypt certificate).
 
-    env_vars (optionnel) : dictionnaire de variables d'environnement à
-    passer au conteneur.
+    env_vars (optional): dict of environment variables to pass to the
+    container.
 
-    url_env_var (optionnel) : nom d'une variable d'environnement à calculer
-    et injecter AUTOMATIQUEMENT avec l'adresse complète de l'app une fois
-    connue (ex: "DOMAIN", "ROOT_URL" — le nom exact dépend de l'app, voir sa
-    documentation). Évite d'avoir à taper soi-même une URL qui doit rester
-    synchronisée avec le domaine/chemin choisis par ailleurs — simplification
-    demandée par Patrick le 13/07/2026, suite à un premier essai jugé trop
-    manuel/source d'erreur.
+    url_env_var (optional): name of an environment variable to
+    AUTOMATICALLY compute and inject with the app's full address once
+    known (e.g. "DOMAIN", "ROOT_URL" — the exact name depends on the app,
+    see its documentation). Avoids having to type a URL yourself that must
+    stay in sync with the domain/path chosen elsewhere — simplification
+    requested by Patrick on 2026-07-13, after a first attempt deemed too
+    manual/error-prone.
 
-    reuse_existing_domain (optionnel, mode sous-domaine uniquement) : si
-    True, ne tente PAS de créer le domaine YunoHost (il existe déjà et a été
-    vérifié vide via check_subdomain_status) — évite une erreur YunoHost sur
-    un domaine déjà déclaré. Sert aussi de mécanisme de reprise naturel :
-    si le certificat échoue lors d'un premier essai, le domaine reste créé ;
-    relancer l'installation avec ce paramètre reprend juste après, sans tout
-    recommencer.
+    reuse_existing_domain (optional, subdomain mode only): if True, does
+    NOT try to create the YunoHost domain (it already exists and was
+    verified empty via check_subdomain_status) — avoids a YunoHost error on
+    an already-declared domain. Also serves as a natural resume mechanism:
+    if the certificate fails on a first attempt, the domain stays created;
+    relaunching the install with this parameter just picks up right after,
+    without starting over.
 
-    Lève DockerConnectorError avec un message clair à chaque étape qui peut
-    échouer de façon réellement bloquante (paramètres invalides, port
-    indisponible, Docker qui refuse de lancer le conteneur...), pour que
-    l'utilisateur comprenne ce qui a coincé (règle #1 : jamais d'échec
-    silencieux).
+    Raises DockerConnectorError with a clear message at every step that can
+    genuinely fail in a blocking way (invalid parameters, unavailable port,
+    Docker refusing to start the container...), so the user understands
+    what got stuck (rule #1: never fail silently).
 
-    Décision du 14/07/2026 (Patrick, suite à l'anomalie #49) : en mode
-    "subdomain", un DNS pas encore propagé chez le registrar ne doit PLUS
-    bloquer toute l'installation (diagnostic DNS/Web en échec, certificat
-    Let's Encrypt inobtenable) — l'app est quand même exposée avec le
-    certificat disponible (même auto-signé), et un avertissement est
-    consigné dans `entry["warnings"]` plutôt que de tout annuler. Point
-    vérifié (règle #1, 14/07/2026) : le cron quotidien YunoHost
-    (`yunohost domain cert renew`) ne fait que renouveler un certificat
-    Let's Encrypt déjà en place et proche d'expirer — il ne bascule JAMAIS
-    tout seul un domaine resté sur un certificat auto-signé vers Let's
-    Encrypt. Une fois le DNS propagé, il faut donc relancer l'installation
-    (le sous-domaine existant sera détecté et réutilisé via
-    `reuse_existing_domain`), pas simplement attendre.
+    Decision from 2026-07-14 (Patrick, following issue #49): in "subdomain"
+    mode, DNS not yet propagated at the registrar must NO LONGER block the
+    whole installation (failed DNS/Web diagnosis, unobtainable Let's
+    Encrypt certificate) — the app is still exposed with whatever
+    certificate is available (even self-signed), and a warning is recorded
+    in `entry["warnings"]` instead of cancelling everything. Point checked
+    (rule #1, 2026-07-14): YunoHost's daily cron (`yunohost domain cert
+    renew`) only renews an existing Let's Encrypt certificate close to
+    expiring — it NEVER switches a domain still on a self-signed
+    certificate over to Let's Encrypt on its own. Once DNS has propagated,
+    the install must therefore be relaunched (the existing subdomain will
+    be detected and reused via `reuse_existing_domain`), not just waited
+    out.
     """
     warnings = []
 
@@ -652,7 +646,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     step("step_pick_port")
     host_port = _pick_free_port(lang)
 
-    # --- Résolution du domaine/chemin cible selon le mode ---
+    # --- Resolving the target domain/path depending on the mode ---
     if mode == "subdomain":
         if not new_subdomain or not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,62}", new_subdomain):
             raise DockerConnectorError(t("err_invalid_subdomain", lang))
@@ -660,9 +654,9 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         target_path = "/"
 
         if reuse_existing_domain:
-            # Le sous-domaine existe déjà et a été vérifié vide (voir
-            # check_subdomain_status) — on ne le recrée pas, YunoHost
-            # refuserait de toute façon un domaine déjà déclaré.
+            # The subdomain already exists and was verified empty (see
+            # check_subdomain_status) — it isn't recreated, YunoHost would
+            # refuse an already-declared domain anyway.
             pass
         else:
             step("step_create_domain")
@@ -672,13 +666,13 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
                 lang,
             )
 
-        # Un diagnostic doit exister avant de pouvoir demander un certificat
-        # (leçon apprise le 10/07/2026, incident Portainer). Leurs résultats
-        # sont vérifiés, mais depuis le 14/07/2026 un échec ici n'annule plus
-        # l'installation (décision Patrick, anomalie #49) : c'est le signe le
-        # plus courant d'une zone DNS pas encore paramétrée chez le
-        # registrar — on avertit au lieu de bloquer, l'app sera de toute
-        # façon exposée avec le certificat disponible (voir plus bas).
+        # A diagnosis must exist before a certificate can be requested
+        # (lesson learned on 2026-07-10, Portainer incident). Their results
+        # are checked, but since 2026-07-14 a failure here no longer
+        # cancels the installation (Patrick's decision, issue #49): it's
+        # the most common sign of a DNS zone not yet configured at the
+        # registrar — we warn instead of blocking, the app will be exposed
+        # anyway with whatever certificate is available (see below).
         step("step_dns_diag")
         dns_diag = subprocess.run(
             ["/usr/bin/sudo", "-n", "yunohost", "diagnosis", "run", "--force", "--", "dnsrecords"],
@@ -696,28 +690,28 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             warnings.append(t("warn_web_diag_failed", lang, domain=target_domain))
 
         step("step_get_cert")
-        # `yunohost domain cert install` échoue avec un code non nul si un
-        # certificat valide existe déjà sur ce domaine (cas normal du mode
-        # "réutiliser ce sous-domaine existant") — ce n'est pas une vraie
-        # erreur en soi, donc son code de retour n'est volontairement pas
-        # utilisé ici pour décider d'avertir ou non (voir plus bas, trouvé
-        # le 18/07/2026 : le cas de réutilisation déclenchait un faux
-        # avertissement "certificat non obtenu" alors que le certificat
-        # existant restait valide de bout en bout).
+        # `yunohost domain cert install` fails with a non-zero code if a
+        # valid certificate already exists on this domain (the normal case
+        # for the "reuse this existing subdomain" mode) — this isn't a
+        # real error in itself, so its return code is deliberately not
+        # used here to decide whether to warn (see below, found on
+        # 2026-07-18: the reuse case was triggering a false "certificate
+        # not obtained" warning even though the existing certificate
+        # remained valid throughout).
         subprocess.run(
             ["/usr/bin/sudo", "-n", "yunohost", "domain", "cert", "install", target_domain],
             capture_output=True, text=True, timeout=180,
         )
 
-        # Seule la vérification réelle de l'état du certificat fait foi,
-        # jamais le seul code de retour de la commande d'installation
-        # ci-dessus : `cert install` peut renvoyer 0 sans avoir réellement
-        # installé de certificat Let's Encrypt (bug YunoHost : continue
-        # silencieux quand le domaine n'est pas encore prêt pour ACME —
-        # découvert le 13/07/2026 sur test1.wappos.fr, DNS absent chez OVH),
-        # ET peut renvoyer un code non nul alors que tout va bien (cas de
-        # réutilisation d'un domaine ayant déjà un certificat valide,
-        # trouvé le 18/07/2026 sur portainer.wappos.fr).
+        # Only the real check of the certificate's status is authoritative,
+        # never just the return code of the install command above: `cert
+        # install` can return 0 without having actually installed a Let's
+        # Encrypt certificate (YunoHost bug: silently continues when the
+        # domain isn't ready for ACME yet — discovered on 2026-07-13 on
+        # test1.wappos.fr, no DNS at OVH), AND can return a non-zero code
+        # even though everything is fine (case of reusing a domain that
+        # already has a valid certificate, found on 2026-07-18 on
+        # portainer.wappos.fr).
         step("step_check_cert")
         try:
             cert_check_output = _run_sudo(
@@ -733,20 +727,19 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             warnings.append(t("warn_verify_cert_failed", lang, domain=target_domain, error=e))
             ca_type = None
 
-        # ca_type is None uniquement quand la vérification elle-même a
-        # échoué (exception ci-dessus, avertissement déjà ajouté à ce
-        # moment-là) — ne pas dupliquer un second avertissement pour le
-        # même échec.
+        # ca_type is None only when the check itself failed (exception
+        # above, warning already added at that point) — don't duplicate a
+        # second warning for the same failure.
         if ca_type and ca_type != "letsencrypt":
             warnings.append(t("warn_cert_not_letsencrypt", lang, domain=target_domain, ca_type=ca_type))
     else:
         target_domain = domain
         target_path = path if path.startswith("/") else f"/{path}"
 
-    # --- Variable d'URL de base calculée automatiquement (optionnel) ---
-    # Le chemin ("/") ne doit pas être doublé en fin d'URL (ex: éviter
-    # "https://x.fr/vaultwarden-test/" en mode sous-domaine où target_path
-    # vaut déjà "/").
+    # --- Automatically computed base URL variable (optional) ---
+    # The path ("/") must not be doubled at the end of the URL (e.g. avoid
+    # "https://x.fr/vaultwarden-test/" in subdomain mode where target_path
+    # is already "/").
     if url_env_var:
         env_vars = dict(env_vars) if env_vars else {}
         if target_path == "/":
@@ -754,7 +747,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         else:
             env_vars[url_env_var] = f"https://{target_domain}{target_path}"
 
-    # --- Volume de données persistantes (optionnel) ---
+    # --- Persistent data volume (optional) ---
     volume_name = None
     if data_path:
         step("step_create_volume")
@@ -764,7 +757,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         except docker.errors.APIError as e:
             raise DockerConnectorError(t("err_create_volume", lang, error=e))
 
-    # --- Lancement du conteneur Docker ---
+    # --- Starting the Docker container ---
     step("step_run_container")
     container_name = f"docker-gate-{slug}"
     run_kwargs = dict(
@@ -781,12 +774,12 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     try:
         docker_client.containers.run(image, **run_kwargs)
     except docker.errors.APIError as e:
-        # Audit chantier 5 (17/07/2026) : le volume a pu être créé juste
-        # au-dessus (data_path renseigné) — avant ce correctif, un échec ICI
-        # laissait ce volume orphelin sans aucune tentative de nettoyage,
-        # alors que le même volume est nettoyé plus bas si c'est l'étape
-        # d'exposition qui échoue à la place. Incohérence corrigée : même
-        # geste défensif qu'à l'exposition, pour un échec sur cette étape.
+        # Audit workstream 5 (2026-07-17): the volume may have just been
+        # created above (data_path provided) — before this fix, a failure
+        # HERE left that volume orphaned with no cleanup attempt at all,
+        # even though the same volume is cleaned up further below if it's
+        # the exposure step that fails instead. Inconsistency fixed: same
+        # defensive gesture as on exposure, for a failure at this step.
         if volume_name:
             try:
                 docker_client.volumes.get(volume_name).remove()
@@ -794,12 +787,13 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
                 pass
         raise DockerConnectorError(t("err_run_container", lang, error=e))
 
-    # --- Exposition via l'app officielle "redirect" ---
+    # --- Exposure via the official "redirect" app ---
     step("step_expose_app")
-    # Passthrough direct sur le vocabulaire natif YunoHost (admins/all_users/
-    # visitors) — audit 17/07/2026, docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md.
-    # Repli sur le plus restrictif si une valeur inattendue arrivait ici
-    # (défense en profondeur, la validation principale est déjà faite dans app.py).
+    # Direct passthrough of YunoHost's native vocabulary (admins/all_users/
+    # visitors) — audit 2026-07-17, docs/02-wappos/audits/2026-07-17-audit-permissions-yunohost.md.
+    # Falls back to the most restrictive if an unexpected value ever
+    # arrived here (defense in depth, the main validation is already done
+    # in app.py).
     permission_group = visibility if visibility in ("admins", "all_users", "visitors") else "admins"
     args_string = (
         f"domain={target_domain}"
@@ -820,7 +814,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             lang,
         )
     except DockerConnectorError:
-        # Ne laisse pas un conteneur (ni un volume) orphelin si l'exposition échoue.
+        # Don't leave an orphaned container (or volume) if exposure fails.
         try:
             c = docker_client.containers.get(container_name)
             c.stop()
@@ -840,9 +834,8 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     new_app_ids = apps_after - apps_before
     yunohost_app_id = next(iter(new_app_ids), None)
 
-    # --- Logo Docker Gate sur l'instance "redirect" exposée (best-effort :
-    # une icône manquante ne doit jamais faire échouer une création qui a
-    # par ailleurs réussi) ---
+    # --- Docker Gate logo on the exposed "redirect" instance (best-effort:
+    # a missing icon must never fail a creation that otherwise succeeded) ---
     if yunohost_app_id:
         try:
             _run_sudo(
@@ -887,33 +880,33 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
 
 
 def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
-    """Supprime une app en 3 couches distinctes, vérifiées séparément
-    (règle #30 — vérification multi-niveaux, leçon du 10/07/2026) :
-    1) permission SSO + conf nginx (via `yunohost app remove`)
-    2) conteneur Docker
-    3) entrée dans notre fichier d'état
+    """Removes an app in 3 distinct layers, checked separately (rule #30 —
+    multi-level verification, lesson from 2026-07-10):
+    1) SSO permission + nginx config (via `yunohost app remove`)
+    2) Docker container
+    3) entry in our state file
 
-    delete_data (défaut False) : voir create_docker_app — jamais supprimé
-    par défaut, case à cocher explicite requise.
+    delete_data (default False): see create_docker_app — never deleted by
+    default, an explicit checkbox is required.
 
-    delete_domain (défaut False, pertinent seulement en mode "subdomain") :
-    si coché, supprime aussi le domaine YunoHost dédié créé pour cette app.
-    Point de vigilance propre à une architecture multi-VM avec TLS-passthrough
-    (comme celle de BYRTN) : ceci ne nettoie PAS l'entrée de passthrough sur
-    l'éventuelle VM relais (hors de portée de cette app) — à retirer à la main
-    si besoin.
+    delete_domain (default False, only relevant in "subdomain" mode): if
+    checked, also removes the dedicated YunoHost domain created for this
+    app. A watch point specific to a multi-VM architecture with
+    TLS-passthrough (like BYRTN's): this does NOT clean up the passthrough
+    entry on the relay VM, if any (out of this app's reach) — remove it by
+    hand if needed.
 
-    Chaque étape est tentée indépendamment (best-effort) : l'échec d'une
-    étape n'empêche jamais les suivantes de s'exécuter, et l'entrée est
-    systématiquement retirée du fichier d'état à la fin — un échec partiel
-    ne doit jamais laisser Docker Gate dans un état incohérent où il
-    "croit" qu'une app existe encore alors qu'elle a été partiellement
-    démantelée (durci le 15/07/2026, suite à un audit de robustesse : avant
-    cette correction, un échec inattendu à une étape intermédiaire pouvait
-    interrompre toute la suppression sans jamais mettre à jour l'état).
-    Les échecs sont remontés comme avertissements (voir entry["warnings"]
-    retourné) plutôt que de bloquer, cohérent avec le traitement déjà en
-    place pour la création (voir create_docker_app).
+    Each step is attempted independently (best-effort): a failure at one
+    step never prevents the next ones from running, and the entry is
+    always removed from the state file at the end — a partial failure must
+    never leave Docker Gate in an inconsistent state where it "believes" an
+    app still exists when it has been partially dismantled (hardened on
+    2026-07-15, following a robustness audit: before this fix, an
+    unexpected failure at an intermediate step could interrupt the whole
+    removal without ever updating the state). Failures are surfaced as
+    warnings (see the returned entry["warnings"]) rather than blocking,
+    consistent with the handling already in place for creation (see
+    create_docker_app).
     """
     apps = _load_state()
     entry = next((a for a in apps if a["slug"] == slug), None)
@@ -959,10 +952,10 @@ def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
         except DockerConnectorError as e:
             warnings.append(str(e))
 
-    # Toujours retirer l'entrée du fichier d'état, même en cas d'échec
-    # partiel ci-dessus — un résidu réel (conteneur/volume/domaine non
-    # supprimé) reste détectable et traitable depuis la page Audit &
-    # nettoyage, plutôt que de bloquer indéfiniment la suppression.
+    # Always remove the entry from the state file, even after a partial
+    # failure above — real residue (an un-removed container/volume/domain)
+    # stays detectable and actionable from the Audit & cleanup page, rather
+    # than blocking removal indefinitely.
     apps = [a for a in apps if a["slug"] != slug]
     _save_state(apps)
 
@@ -970,21 +963,20 @@ def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
 
 
 # =================================================
-# AUDIT DES RÉSIDUS (étape 3, 12/07/2026)
+# RESIDUE AUDIT (step 3, 2026-07-12)
 # =================================================
-# Principe : Docker Gate doit pouvoir retrouver tout seul ce qu'il a
-# laissé traîner (échecs partiels, tests oubliés) plutôt que de compter sur
-# l'utilisateur pour y penser à chaque fois. Chaque catégorie a un niveau de
-# risque différent : les conteneurs orphelins et les images inutilisées sont
-# sûrs à nettoyer (aucune perte de configuration/données réelle), les volumes
-# orphelins peuvent contenir de vraies données (action prudente, un par un,
-# jamais groupée), les domaines vides ne sont jamais supprimés automatiquement
-# (juste signalés — un domaine peut avoir une utilité hors de la connaissance
-# de cette app).
+# Principle: Docker Gate must be able to find on its own whatever it left
+# behind (partial failures, forgotten tests) rather than relying on the
+# user to think of it every time. Each category carries a different risk
+# level: orphan containers and unused images are safe to clean up (no real
+# configuration/data loss), orphan volumes may contain real data (a
+# cautious action, one at a time, never bulk), empty domains are never
+# removed automatically (only reported — a domain might be useful in a way
+# this app has no knowledge of).
 
 def find_orphan_containers():
-    """Conteneurs Docker nommés 'docker-gate-*' mais absents de notre
-    fichier d'état — reliquats d'une création/suppression interrompue."""
+    """Docker containers named 'docker-gate-*' but absent from our state
+    file — leftovers from an interrupted creation/removal."""
     known_names = {a["container_name"] for a in _load_state()}
     orphans = []
     for c in docker_client.containers.list(all=True):
@@ -994,9 +986,9 @@ def find_orphan_containers():
 
 
 def find_orphan_volumes():
-    """Volumes Docker nommés 'docker-gate-*-data' mais absents de notre
-    fichier d'état — jamais supprimés en masse, un par un et sur confirmation
-    explicite (peuvent contenir de vraies données)."""
+    """Docker volumes named 'docker-gate-*-data' but absent from our state
+    file — never bulk-deleted, one at a time and with explicit confirmation
+    (may contain real data)."""
     known_volumes = {a["volume_name"] for a in _load_state() if a.get("volume_name")}
     orphans = []
     for v in docker_client.volumes.list():
@@ -1006,14 +998,14 @@ def find_orphan_volumes():
 
 
 def find_dangling_images():
-    """Images Docker 'dangling' (sans nom, sans conteneur les utilisant) —
-    résidu standard et sûr de Docker, indépendant de nos propres apps."""
+    """'Dangling' Docker images (unnamed, with no container using them) —
+    a standard and safe kind of Docker residue, unrelated to our own apps."""
     images = docker_client.images.list(filters={"dangling": True})
     return [{"id": img.short_id, "size_mb": round(img.attrs.get("Size", 0) / (1024 * 1024), 1)} for img in images]
 
 
 def remove_orphan_container(name, lang):
-    """Supprime un conteneur orphelin précis (jamais en masse)."""
+    """Removes one specific orphan container (never in bulk)."""
     known_names = {a["container_name"] for a in _load_state()}
     if name in known_names or not name.startswith("docker-gate-"):
         raise DockerConnectorError(t("err_container_not_orphan", lang))
@@ -1026,7 +1018,7 @@ def remove_orphan_container(name, lang):
 
 
 def remove_orphan_volume(name, lang):
-    """Supprime un volume orphelin précis (jamais en masse)."""
+    """Removes one specific orphan volume (never in bulk)."""
     known_volumes = {a["volume_name"] for a in _load_state() if a.get("volume_name")}
     if name in known_volumes or not (name.startswith("docker-gate-") and name.endswith("-data")):
         raise DockerConnectorError(t("err_volume_not_orphan", lang))
@@ -1037,17 +1029,17 @@ def remove_orphan_volume(name, lang):
 
 
 def prune_dangling_images():
-    """Nettoie toutes les images dangling — opération standard et sûre de
-    Docker (équivalent de `docker image prune -f`), aucune image utilisée par
-    un conteneur existant n'est jamais concernée."""
+    """Cleans up all dangling images — a standard, safe Docker operation
+    (equivalent to `docker image prune -f`), no image used by an existing
+    container is ever affected."""
     result = docker_client.images.prune(filters={"dangling": True})
     return result.get("SpaceReclaimed", 0)
 
 
 def find_empty_domains(lang):
-    """Domaines YunoHost sans aucune app installée dessus — signalés
-    uniquement, JAMAIS supprimés automatiquement (un domaine peut avoir une
-    utilité que cette app ne connaît pas)."""
+    """YunoHost domains with no app installed on them — reported only,
+    NEVER removed automatically (a domain might be useful in a way this app
+    has no knowledge of)."""
     domains = existing_domains(lang)
     known_apps_domains = {a["domain"] for a in _load_state()}
     empty = []
@@ -1065,26 +1057,25 @@ def find_empty_domains(lang):
 
 
 # =================================================
-# DÉSINSTALLATION COMPLÈTE DE DOCKER CE (18/07/2026)
+# FULL DOCKER CE UNINSTALL (2026-07-18)
 # =================================================
-# Symétrique à ynh_docker_gate__ensure_docker_installed (scripts/_common.sh),
-# qui installe Docker CE automatiquement. Exposée ici, en plus de la
-# question posée par scripts/remove, car cette dernière ne peut jamais
-# s'afficher lors d'une désinstallation déclenchée depuis le panneau
-# d'administration YunoHost (pas de terminal attaché à ce moment-là, voir
-# journal du 18/07/2026) — cette page web, elle, fonctionne quel que soit
-# le mode de suppression choisi pour Docker Gate lui-même.
+# Symmetric to ynh_docker_gate__ensure_docker_installed (scripts/_common.sh),
+# which installs Docker CE automatically. Exposed here, in addition to the
+# question asked by scripts/remove, because the latter can never appear
+# when Docker Gate is removed via the YunoHost admin panel (no terminal
+# attached in that case, see the 2026-07-18 journal) — this web page, on
+# the other hand, works regardless of how Docker Gate itself was removed.
 
 def docker_ce_status():
-    """État actuel de Docker CE sur la machine : installé ou non, conteneurs
-    gérés par Docker Gate toujours présents (que ce bouton arrêterait aussi
-    — pas seulement les conteneurs "étrangers") et conteneurs qui ne sont
-    PAS gérés par Docker Gate. Purger Docker CE détruit les deux catégories
-    sans distinction : un avertissement limité aux seuls conteneurs
-    étrangers aurait donné un faux sentiment de sécurité tant qu'aucune app
-    tierce n'est présente, alors que les apps gérées par Docker Gate
-    elles-mêmes (ex : Portainer) cesseraient tout autant de fonctionner
-    (point soulevé par Patrick le 18/07/2026 après un test réel)."""
+    """Current state of Docker CE on the machine: installed or not,
+    containers still managed by Docker Gate (which this button would also
+    stop — not just "foreign" containers), and containers that are NOT
+    managed by Docker Gate. Purging Docker CE destroys both categories
+    without distinction: a warning limited to only foreign containers would
+    have given a false sense of safety as long as no third-party app was
+    present, while apps managed by Docker Gate itself (e.g. Portainer)
+    would stop working just the same (point raised by Patrick on
+    2026-07-18 after a real test)."""
     installed = shutil.which("docker") is not None
     tracked = []
     foreign = []
@@ -1097,24 +1088,23 @@ def docker_ce_status():
                 else:
                     foreign.append(c.name)
         except docker.errors.DockerException:
-            # Docker installé mais démon injoignable (peu probable, mais ne
-            # doit jamais faire planter la page Audit) — on affiche l'état
-            # "installé" sans pouvoir lister les conteneurs dans ce cas.
+            # Docker installed but the daemon is unreachable (unlikely, but
+            # must never crash the Audit page) — shows the "installed"
+            # state without being able to list containers in that case.
             pass
     return {"installed": installed, "tracked_containers": tracked, "foreign_containers": foreign}
 
 
 def uninstall_docker_ce(lang):
-    """Purge complète de Docker CE (paquets, /var/lib/docker, groupe
-    système docker) — même logique que la question interactive de
-    scripts/remove, exposée ici en action web pour couvrir le cas où
-    Docker Gate est désinstallé depuis le panneau d'administration
-    (aucun terminal attaché, la question de scripts/remove ne peut alors
-    jamais s'afficher). Aucune vérification de sécurité supplémentaire
-    ici sur les conteneurs étrangers : l'avertissement est affiché côté
-    interface (voir docker_ce_status) avant que l'admin ne clique,
-    cohérent avec l'armement à deux clics déjà en place pour les
-    suppressions destructives de cette page."""
+    """Full purge of Docker CE (packages, /var/lib/docker, the system
+    docker group) — same logic as the interactive question in
+    scripts/remove, exposed here as a web action to cover the case where
+    Docker Gate is uninstalled from the admin panel (no terminal attached,
+    so the scripts/remove question can never appear then). No additional
+    safety check here on foreign containers: the warning is shown on the
+    interface side (see docker_ce_status) before the admin clicks,
+    consistent with the two-click arming already in place for destructive
+    removals on this page."""
     commands = [
         (["systemctl", "stop", "docker", "docker.socket", "containerd"], t("err_docker_ce_stop", lang)),
         (
@@ -1139,8 +1129,8 @@ def uninstall_docker_ce(lang):
         except DockerConnectorError as e:
             warnings.append(str(e))
 
-    # groupdel échoue si le groupe n'existe déjà plus (ex : deuxième
-    # tentative) — non bloquant, pas un vrai échec dans ce cas précis.
+    # groupdel fails if the group no longer exists (e.g. a second attempt)
+    # — non-blocking, not a real failure in this specific case.
     try:
         _run_sudo(["groupdel", "docker"], t("err_docker_ce_groupdel", lang), lang)
     except DockerConnectorError:

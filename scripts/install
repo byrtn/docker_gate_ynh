@@ -3,59 +3,59 @@
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
-# Chemin vers la racine du paquet, résolu depuis l'emplacement RÉEL de ce
-# script (audit test réel backup/restore, 17/07/2026) — jamais depuis le
-# répertoire courant. `../conf/...` marchait par coïncidence en install/
-# upgrade (YunoHost y exécute le script avec `scripts/` comme répertoire
-# courant), mais un vrai test de `yunohost backup restore` a confirmé que
-# ce n'est PAS vrai en restauration (répertoire courant différent) — le
-# script plantait sur `cp ../conf/docker_gate.sudoers` avec un "Aucun
-# fichier ou dossier de ce type". `$(dirname "$0")` fonctionne dans TOUS
-# les contextes (déjà utilisé pour `_common.sh` juste au-dessus).
+# Path to the package root, resolved from this script's REAL location
+# (real backup/restore test audit, 2026-07-17) — never from the current
+# working directory. `../conf/...` happened to work in install/upgrade
+# (YunoHost runs the script there with `scripts/` as the working
+# directory), but a real `yunohost backup restore` test confirmed this is
+# NOT true during a restore (different working directory) — the script
+# used to crash on `cp ../conf/docker_gate.sudoers` with a "No such file or
+# directory". `$(dirname "$0")` works in ALL contexts (already used for
+# `_common.sh` just above).
 pkg_dir="$(dirname "$0")/.."
 
 #=================================================
-# INSTALL DOCKER (si nécessaire)
+# INSTALL DOCKER (if needed)
 #=================================================
-ynh_script_progression --message="Vérification / installation de Docker CE..." --weight=30
+ynh_script_progression --message="Checking / installing Docker CE..." --weight=30
 
 ynh_docker_gate__ensure_docker_installed
 
-# Le système utilisateur de l'app doit pouvoir piloter Docker
+# The app's system user needs to be able to drive Docker
 usermod -aG docker "$app"
 
 #=================================================
 # DEPLOY SOURCE FILES
 #=================================================
-ynh_script_progression --message="Déploiement des fichiers de l'application..." --weight=5
+ynh_script_progression --message="Deploying the app's files..." --weight=5
 
 mkdir -p "$install_dir"
 cp -ar "$pkg_dir/sources/." "$install_dir/"
 
-# Copie du sudoers-modèle et du logo DANS install_dir (audit test réel
-# backup/restore, 17/07/2026 — 2ᵉ correctif) : un premier correctif basé
-# sur `$(dirname "$0")` s'est révélé insuffisant — vérifié en conditions
-# réelles que pendant une restauration, YunoHost ne met à disposition QUE
-# le dossier `scripts/` (là où vit ce script), PAS `conf/`/`logo.png`/
-# `sources/` du paquet. `install_dir`, lui, est fidèlement restauré depuis
-# l'archive de sauvegarde (contient déjà `sources/`) — copier aussi ces 2
-# fichiers dedans les rend disponibles à l'identique en install/upgrade
-# ET en restauration, sans dépendre d'un dossier `conf/` qui n'existe pas
-# forcément à côté du script au moment de l'exécution.
+# Copy the sudoers template and the logo INTO install_dir (real
+# backup/restore test audit, 2026-07-17 — 2nd fix): a first fix based on
+# `$(dirname "$0")` turned out to be insufficient — verified under real
+# conditions that during a restore, YunoHost only makes the `scripts/`
+# folder available (where this script lives), NOT the package's
+# `conf/`/`logo.png`/`sources/`. `install_dir` itself is faithfully
+# restored from the backup archive (already contains `sources/`) — also
+# copying these 2 files into it makes them available identically during
+# install/upgrade AND during restore, without depending on a `conf/`
+# folder that isn't necessarily present next to the script at runtime.
 mkdir -p "$install_dir/.package"
 cp "$pkg_dir/conf/docker_gate.sudoers" "$install_dir/.package/docker_gate.sudoers"
 cp "$pkg_dir/logo.png" "$install_dir/.package/logo.png"
 
-# Langue par défaut de l'interface (voir manifest.toml, question
-# default_language) — repli utilisé par app.py tant que l'utilisateur n'a
-# pas explicitement choisi via le sélecteur EN/FR de l'interface (cookie).
+# Default interface language (see manifest.toml, default_language
+# question) — fallback used by app.py as long as the user hasn't
+# explicitly chosen one via the interface's EN/FR switcher (cookie).
 mkdir -p "$install_dir/data"
 echo -n "$default_language" > "$install_dir/data/default_language.txt"
 
 #=================================================
 # PYTHON VENV
 #=================================================
-ynh_script_progression --message="Mise en place de l'environnement Python..." --weight=15
+ynh_script_progression --message="Setting up the Python environment..." --weight=15
 
 python3 -m venv "$venv_dir"
 "$venv_dir/bin/pip" install --upgrade pip
@@ -68,32 +68,33 @@ chown -R "$app:$app" "$install_dir"
 chmod 750 "$install_dir"
 
 #=================================================
-# SUDOERS (droits ciblés, voir conf/docker_gate.sudoers)
+# SUDOERS (targeted rights, see conf/docker_gate.sudoers)
 #=================================================
-ynh_script_progression --message="Configuration des droits sudo ciblés..." --weight=5
+ynh_script_progression --message="Configuring the targeted sudo rights..." --weight=5
 
 cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/docker_gate
 sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
 chmod 440 /etc/sudoers.d/docker_gate
 chown root:root /etc/sudoers.d/docker_gate
-visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="Le fichier sudoers généré est invalide, installation interrompue par sécurité."
+visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="The generated sudoers file is invalid, installation aborted for safety."
 
 #=================================================
-# LOGO (panneau d'administration ET portail utilisateur YunoHost)
+# LOGO (YunoHost admin panel AND user portal)
 #=================================================
-# Deux mécanismes DISTINCTS, découverts le 15/07/2026 (le premier seul ne
-# suffit pas — logo visible dans l'admin mais absent de la tuile du portail) :
-# 1) Panneau d'administration (yunohost/app.py, fonction app_info) : astuce
-#    de personnalisation locale pour les apps hors catalogue officiel — un
-#    fichier "$app.png" dans /usr/share/yunohost/applogos/ est utilisé en
-#    priorité s'il existe.
-# 2) Tuile du portail utilisateur (yunohost/app.py, app_portal_info) : lit
-#    UNIQUEMENT le logo_hash stocké sur la permission "$app.main" — sans
-#    rapport avec le fichier "$app.png" du point 1. Se règle via la commande
-#    officielle "yunohost user permission update $app.main --logo <fichier>"
-#    (yunohost/permission.py), qui calcule le hash et pose le fichier lui-même
-#    — jamais besoin de le faire à la main.
-ynh_script_progression --message="Installation du logo..." --weight=2
+# Two DISTINCT mechanisms, discovered on 2026-07-15 (the first one alone
+# isn't enough — logo visible in the admin panel but missing from the
+# portal tile):
+# 1) Admin panel (yunohost/app.py, app_info function): a local
+#    customization trick for apps outside the official catalog — a file
+#    named "$app.png" in /usr/share/yunohost/applogos/ is used with
+#    priority if it exists.
+# 2) User portal tile (yunohost/app.py, app_portal_info): reads ONLY the
+#    logo_hash stored on the "$app.main" permission — unrelated to the
+#    "$app.png" file from point 1. Set via the official command
+#    "yunohost user permission update $app.main --logo <file>"
+#    (yunohost/permission.py), which computes the hash and places the file
+#    itself — never a need to do it by hand.
+ynh_script_progression --message="Installing the logo..." --weight=2
 
 mkdir -p /usr/share/yunohost/applogos
 install -o root -g root -m 0644 "$install_dir/.package/logo.png" "/usr/share/yunohost/applogos/$app.png"
@@ -102,25 +103,25 @@ yunohost user permission update "$app.main" --logo "$install_dir/.package/logo.p
 #=================================================
 # SYSTEMD CONFIGURATION
 #=================================================
-ynh_script_progression --message="Configuration du service systemd..." --weight=5
+ynh_script_progression --message="Configuring the systemd service..." --weight=5
 
 ynh_add_systemd_config
 
 #=================================================
 # NGINX CONFIGURATION
 #=================================================
-ynh_script_progression --message="Configuration du serveur web..." --weight=5
+ynh_script_progression --message="Configuring the web server..." --weight=5
 
 ynh_add_nginx_config
 
 #=================================================
 # START SERVICE
 #=================================================
-ynh_script_progression --message="Démarrage de Docker Gate..." --weight=10
+ynh_script_progression --message="Starting Docker Gate..." --weight=10
 
 yunohost service add "$app" --description="Docker Gate for YunoHost" --log="/var/log/$app/$app.log"
 
 systemctl enable "$app"
 systemctl start "$app"
 
-ynh_script_progression --message="Installation terminée." --last
+ynh_script_progression --message="Installation completed." --last

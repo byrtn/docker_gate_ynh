@@ -1,15 +1,14 @@
 """
-Docker Gate — suivi de progression des opérations longues.
+Docker Gate — progress tracking for long-running operations.
 
-Étape 3 (13/07/2026) : suivi détaillé étape par étape pour les opérations qui
-peuvent prendre de quelques secondes à plusieurs minutes (téléchargement
-d'image Docker, obtention d'un certificat Let's Encrypt...) — auparavant
-aucun retour visuel n'existait pendant ce temps.
+Step 3 (2026-07-13): detailed step-by-step tracking for operations that can
+take anywhere from a few seconds to several minutes (pulling a Docker image,
+obtaining a Let's Encrypt certificate...) — previously there was no visual
+feedback at all during that time.
 
-Fonctionne en mémoire, dans un seul processus. C'est précisément pour ça que
-le service systemd de cette app tourne avec un seul worker gunicorn (voir
-conf/systemd.service) : un état gardé en mémoire Python ne serait pas visible
-entre plusieurs processus séparés.
+Runs in memory, in a single process. That's precisely why this app's systemd
+service runs with a single gunicorn worker (see conf/systemd.service): state
+kept in Python memory wouldn't be visible across multiple separate processes.
 """
 import threading
 import time
@@ -18,12 +17,12 @@ import uuid
 _jobs = {}
 _lock = threading.Lock()
 
-# Un job terminé n'a plus besoin d'être gardé au-delà du temps qu'il faudrait
-# à un admin pour recharger la page de progression après coup. Purgé à
-# chaque nouvelle création plutôt que via un thread dédié — largement
-# suffisant vu la fréquence d'usage de cet outil (durci le 15/07/2026 :
-# sans ça, chaque app créée/supprimée laissait un job en mémoire pour
-# toujours, jusqu'au prochain redémarrage du service).
+# A finished job doesn't need to be kept around longer than it would take an
+# admin to reload the progress page afterwards. Pruned on every new job
+# creation rather than via a dedicated thread — plenty sufficient given how
+# often this tool is used (hardened on 2026-07-15: without this, every app
+# created/removed left a job in memory forever, until the next service
+# restart).
 _JOB_TTL_SECONDS = 3600
 
 
@@ -38,9 +37,9 @@ def _prune_old_jobs():
 
 
 def create_job(steps):
-    """Crée un nouveau job de suivi, avec la liste ordonnée des étapes prévues
-    (des libellés lisibles, ex: "Lancement du conteneur Docker"). Retourne un
-    identifiant unique à utiliser pour suivre et faire avancer ce job."""
+    """Creates a new tracking job, with the ordered list of planned steps
+    (human-readable labels, e.g. "Starting the Docker container"). Returns a
+    unique identifier used to track and advance this job."""
     job_id = uuid.uuid4().hex
     with _lock:
         _prune_old_jobs()
@@ -56,9 +55,9 @@ def create_job(steps):
 
 
 def advance(job_id, step_label):
-    """Marque l'étape correspondant à `step_label` comme en cours/atteinte.
-    On avance par libellé (pas par numéro) pour qu'il n'y ait jamais de
-    désynchronisation possible entre la liste déclarée et les appels réels."""
+    """Marks the step matching `step_label` as reached/in progress.
+    We advance by label (not by index) so there's never a possible
+    desync between the declared list and the actual calls."""
     with _lock:
         if job_id in _jobs:
             job = _jobs[job_id]
@@ -67,13 +66,13 @@ def advance(job_id, step_label):
 
 
 def finish(job_id, warnings=None):
-    """Marque le job comme terminé avec succès.
+    """Marks the job as successfully finished.
 
-    warnings (optionnel) : points de vigilance non-bloquants remontés
-    pendant l'installation (ex: DNS pas encore propagé chez le registrar,
-    voir ynh_manager.create_docker_app) — affichés dans le résumé de fin
-    d'installation côté interface, sans avoir empêché l'app d'être créée
-    (décision du 14/07/2026, anomalie #49)."""
+    warnings (optional): non-blocking points to watch, surfaced during
+    installation (e.g. DNS not yet propagated at the registrar, see
+    ynh_manager.create_docker_app) — shown in the end-of-install summary
+    on the interface, without having prevented the app from being created
+    (decision from 2026-07-14, issue #49)."""
     with _lock:
         if job_id in _jobs:
             job = _jobs[job_id]
@@ -83,7 +82,7 @@ def finish(job_id, warnings=None):
 
 
 def fail(job_id, error_message):
-    """Marque le job comme terminé en échec, avec un message lisible."""
+    """Marks the job as finished with a failure, with a readable message."""
     with _lock:
         if job_id in _jobs:
             _jobs[job_id]["done"] = True
@@ -91,7 +90,7 @@ def fail(job_id, error_message):
 
 
 def get_job(job_id):
-    """Retourne l'état actuel du job, ou None s'il n'existe pas (ex: après
-    un redémarrage du service, la mémoire est vidée — cas géré côté Flask)."""
+    """Returns the job's current state, or None if it doesn't exist (e.g.
+    after a service restart, memory is wiped — handled on the Flask side)."""
     with _lock:
         return _jobs.get(job_id)

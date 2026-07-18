@@ -7,7 +7,7 @@ name = "Docker Gate"
 description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
 description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
 
-version = "1.6~ynh1"
+version = "1.6~ynh2"
 
 maintainers = ["byrtn"]
 
@@ -30,26 +30,26 @@ ram.runtime = "150M"
 
 [install]
     [install.domain]
-    # question générique — le texte est géré par le cœur de YunoHost, non personnalisable
+    # generic question — the text is handled by YunoHost core, not customizable
     type = "domain"
 
     [install.path]
-    # question générique — le texte est géré par le cœur de YunoHost, non personnalisable
+    # generic question — the text is handled by YunoHost core, not customizable
     type = "path"
     default = "/docker-gate"
 
     [install.init_main_permission]
-    # question générique elle aussi (confirmé : le texte affiché était le texte
-    # standard YunoHost, pas le nôtre) — seul le texte d'aide est personnalisable
+    # also a generic question (confirmed: the displayed text was YunoHost's
+    # standard text, not ours) — only the help text is customizable
     type = "group"
     default = "admins"
     help.en = "Docker Gate is an administration tool — access should stay restricted to admins."
     help.fr = "Docker Gate est un outil d'administration — l'accès doit rester restreint aux admins."
 
     [install.default_language]
-    # Langue par défaut de l'interface (15/07/2026, i18n) — reste modifiable
-    # à tout moment depuis l'interface elle-même (sélecteur EN/FR en haut de
-    # chaque page), ce réglage ne sert qu'à choisir le point de départ.
+    # Default interface language (2026-07-15, i18n) — stays changeable at
+    # any time from the interface itself (EN/FR switcher at the top of
+    # every page), this setting only chooses the starting point.
     type = "select"
     choices = ["en", "fr"]
     default = "en"
