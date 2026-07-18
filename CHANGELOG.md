@@ -7,6 +7,13 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh5] — 2026-07-18
+
+### Added
+- "← Back to portal" link in the header, pointing to the YunoHost SSO
+  portal (`/yunohost/sso/`) — there was previously no way to leave Docker
+  Gate and return to the portal from within the app itself.
+
 ## [0.2~ynh4] — 2026-07-17
 
 ### Fixed

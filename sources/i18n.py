@@ -473,6 +473,9 @@ STRINGS = {
     "summary_ok": {"en": "✓ Installation complete, nothing to watch out for.", "fr": "✓ Installation terminée, aucun point de vigilance."},
     "summary_warning_title": {"en": "⚠ Installation complete, with some points to check:", "fr": "⚠ Installation terminée, avec des points à vérifier :"},
     "btn_back_home": {"en": "← Back to home", "fr": "← Retour à l'accueil"},
+
+    # --- base.html (header) ---
+    "nav_back_portal": {"en": "← Back to portal", "fr": "← Retour au portail"},
 }
 
 

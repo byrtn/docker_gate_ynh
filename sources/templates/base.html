@@ -42,6 +42,9 @@
   .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
   .app-header .logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; color: var(--color-primary); }
   .tri { width: 0.65rem; height: 0.65rem; background: var(--color-accent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); display: inline-block; flex-shrink: 0; }
+  .nav-back-portal { font-size: 0.8rem; color: var(--color-text-dim); text-decoration: none; }
+  .nav-back-portal:hover { color: var(--color-primary); text-decoration: underline; }
+
   .lang-switcher { font-size: 0.8rem; }
   .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
   .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
@@ -296,6 +299,7 @@
 <div class="wrap">
   <header class="app-header">
     <div class="logo"><span class="tri"></span> Docker Gate</div>
+    <a class="nav-back-portal" href="/yunohost/sso/">{{ t('nav_back_portal') }}</a>
     <div class="lang-switcher">
       <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
       <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
