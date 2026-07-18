@@ -7,6 +7,18 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [0.2~ynh8] — 2026-07-18
+
+### Fixed
+- An app removed directly from the YunoHost admin panel (bypassing Docker
+  Gate) kept showing up as a working app on the home page — the local
+  bookkeeping file was never told the underlying YunoHost app/permission
+  was gone. The app list is now reconciled against real YunoHost state on
+  every page load: any tracked entry whose YunoHost app no longer exists
+  is dropped from the bookkeeping file. Any leftover Docker container is
+  then correctly picked up as an orphan on the Audit page instead of
+  silently vanishing.
+
 ## [0.2~ynh7] — 2026-07-18
 
 ### Changed

@@ -142,7 +142,7 @@ def set_language(lang):
 
 @app.route("/")
 def index():
-    apps = ynh_manager.list_apps()
+    apps = ynh_manager.list_apps(get_lang())
     return render_template("index.html", apps=apps)
 
 

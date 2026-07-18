@@ -91,7 +91,7 @@ def _save_state(apps):
         raise
 
 
-def list_apps():
+def list_apps(lang="en"):
     apps = _load_state()
     # Rétrocompatibilité (audit 17/07/2026) : les apps créées avant le
     # passage au modèle à 3 groupes n'ont qu'un booléen "public" en état
@@ -100,6 +100,35 @@ def list_apps():
     for a in apps:
         if "visibility" not in a:
             a["visibility"] = "visitors" if a.get("public") else "admins"
+
+    # Réconciliation avec l'état réel YunoHost (bug trouvé le 18/07/2026) :
+    # si une app enfant est supprimée directement depuis le panneau
+    # d'administration YunoHost (en contournant Docker Gate), notre fichier
+    # d'état ne le sait jamais tout seul et continuait de l'afficher comme
+    # fonctionnelle alors que sa permission SSO/conf nginx n'existe plus.
+    # Vérifié à chaque affichage : toute entrée dont le yunohost_app_id ne
+    # correspond plus à une app YunoHost réelle est retirée de l'état — le
+    # conteneur Docker restant (le cas échéant) redevient détectable comme
+    # résidu via /audit, qui sait déjà le gérer proprement. Aucune donnée
+    # n'est perdue ici : seul le suivi devenu faux est corrigé, la
+    # suppression réelle du conteneur/volume reste soumise aux mêmes
+    # garde-fous que d'habitude (page Audit & nettoyage).
+    try:
+        real_ids = {
+            a["id"]
+            for a in json.loads(
+                _run_sudo(["yunohost", "app", "list", "--output-as", "json"], t("err_list_apps", lang), lang)
+            )["apps"]
+        }
+        still_valid = [a for a in apps if not a.get("yunohost_app_id") or a["yunohost_app_id"] in real_ids]
+        if len(still_valid) != len(apps):
+            apps = still_valid
+            _save_state(apps)
+    except (DockerConnectorError, ValueError, KeyError):
+        # Best-effort : si la vérification échoue (sudo, JSON invalide...),
+        # on affiche l'état tel quel plutôt que de casser la page d'accueil.
+        pass
+
     return apps
 
 
