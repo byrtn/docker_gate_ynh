@@ -7,6 +7,20 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.0~ynh1] — 2026-07-18
+
+### Changed
+- Version scheme corrected: `ynhN` had been misused since `0.2~ynh1` as a
+  general iteration counter for every change (including real feature
+  additions and bug fixes), instead of being reserved for packaging-only
+  changes that don't touch the app's behavior (its intended meaning). Bumped
+  to `1.0~ynh1` to reflect the app's actual maturity (audited, tested, ready
+  for catalog submission) rather than reconstructing an artificial `0.3`
+  through `0.9` history. From here on, any change to the app's behavior or
+  appearance bumps the version before `~ynh`; only pure packaging fixes
+  (sudoers paths, manifest fields, script logic with no user-visible effect)
+  bump the `ynhN` counter alone.
+
 ## [0.2~ynh8] — 2026-07-18
 
 ### Fixed
