@@ -166,6 +166,7 @@ const MSG = {
   commError: {{ t('js_comm_error')|tojson }},
   alertSubdomainBlocked: {{ t('js_alert_subdomain_blocked')|tojson }},
   alertPathBlocked: {{ t('js_alert_path_blocked')|tojson }},
+  spaModeSuggested: {{ t('js_spa_mode_suggested')|tojson }},
 };
 
 function toggleMode(mode) {
@@ -337,7 +338,15 @@ function analyze() {
         onSlugInput();
       }
 
-      resultEl.textContent = filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted;
+      let messages = [filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted];
+      if (data.suggested_mode === 'subdomain') {
+        const subdomainRadio = document.querySelector('input[name="mode_simple"][value="subdomain"]');
+        subdomainRadio.checked = true;
+        toggleMode('subdomain');
+        messages.push(MSG.spaModeSuggested);
+      }
+
+      resultEl.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
       resultEl.style.color = filled.length ? '#1A7D43' : '#6B7280';
     })
     .catch(() => {

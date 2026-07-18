@@ -154,22 +154,42 @@ STRINGS = {
     "warn_cert_not_letsencrypt": {
         "en": (
             "{domain} currently only has a {ca_type} certificate (not yet Let's Encrypt) — the app already works, "
-            "but visitors will see a security warning in their browser in the meantime. If your DNS zone isn't "
-            "configured with your registrar yet, do it now. If this server is behind a relay/reverse-proxy "
-            "TLS-passthrough, also check that this domain is properly declared there — otherwise Let's Encrypt "
-            "validation cannot reach this server. If everything was already fine, a simple retry is usually enough "
-            "(YunoHost sometimes blocks the very first attempt on a freshly created domain). Request the "
-            "certificate again from the YunoHost admin panel (Domains > {domain} > Certificate)."
+            "but visitors will see a security warning in their browser in the meantime. Request the certificate "
+            "again from the YunoHost admin panel (Domains > {domain} > Certificate) once you've checked the points "
+            "below."
         ),
         "fr": (
             "{domain} n'a pour l'instant qu'un certificat {ca_type} (pas encore Let's Encrypt) — l'app fonctionne "
-            "déjà, mais les visiteurs verront un avertissement de sécurité dans leur navigateur en attendant. Si ta "
-            "zone DNS n'est pas encore paramétrée chez ton registrar, fais-le maintenant. Si ce serveur est derrière "
-            "un relais/reverse-proxy TLS-passthrough, vérifie aussi que ce domaine y est bien déclaré — sans ça, la "
-            "validation Let's Encrypt ne peut pas atteindre ce serveur. Si tout était déjà bon, un simple nouvel "
-            "essai suffit généralement (YunoHost bloque parfois le tout premier essai sur un domaine tout juste "
-            "créé). Redemande le certificat depuis l'admin YunoHost (Domaines > {domain} > Certificat)."
+            "déjà, mais les visiteurs verront un avertissement de sécurité dans leur navigateur en attendant. "
+            "Redemande le certificat depuis l'admin YunoHost (Domaines > {domain} > Certificat) une fois les points "
+            "ci-dessous vérifiés."
         ),
+    },
+    # Split into its own bullet (2026-07-18, Patrick's feedback after a
+    # real TLS-passthrough troubleshooting session) — these two checks
+    # used to be buried in one dense paragraph together with
+    # warn_cert_not_letsencrypt above; each now becomes its own list item
+    # in the install summary (see progress.html, one <li> per warning
+    # string) so neither gets skipped over.
+    "warn_cert_check_dns": {
+        "en": "→ Check that your DNS zone is properly configured with your registrar for {domain}.",
+        "fr": "→ Vérifie que ta zone DNS est bien configurée chez ton registrar pour {domain}.",
+    },
+    "warn_cert_check_passthrough": {
+        "en": (
+            "→ If this server is behind a relay/reverse-proxy (TLS-passthrough, multi-server setup), check that "
+            "{domain} is explicitly declared there too — otherwise Let's Encrypt validation can never reach this "
+            "server, no matter how many times you retry."
+        ),
+        "fr": (
+            "→ Si ce serveur est derrière un relais/reverse-proxy (TLS-passthrough, architecture multi-serveurs), "
+            "vérifie que {domain} y est aussi explicitement déclaré — sans ça, la validation Let's Encrypt ne peut "
+            "jamais atteindre ce serveur, quel que soit le nombre de tentatives."
+        ),
+    },
+    "warn_cert_retry_tip": {
+        "en": "→ If everything above was already fine, a simple retry is usually enough (YunoHost sometimes blocks the very first attempt on a freshly created domain).",
+        "fr": "→ Si tout ce qui précède était déjà bon, un simple nouvel essai suffit généralement (YunoHost bloque parfois le tout premier essai sur un domaine tout juste créé).",
     },
     "err_create_volume": {
         "en": "Unable to create the data volume: {error}",
@@ -386,6 +406,10 @@ STRINGS = {
         "fr": "Veuillez vérifier toutes les informations pré-remplies ci-dessous et corriger/adapter si nécessaire.",
     },
     "js_nothing_extracted": {"en": "Nothing found to extract — check the advanced mode.", "fr": "Rien trouvé à extraire — vérifie en mode avancé."},
+    "js_spa_mode_suggested": {
+        "en": "⚠️ This image is known not to work under a subpath — \"dedicated subdomain\" mode has been pre-selected for you.",
+        "fr": "⚠️ Cette image est connue pour ne pas fonctionner sous un sous-chemin — le mode \"sous-domaine dédié\" a été présélectionné pour toi.",
+    },
     "js_comm_error": {"en": "Communication error with the server.", "fr": "Erreur de communication avec le serveur."},
     "js_path_available": {"en": "✓ {address} is available.", "fr": "✓ {address} est disponible."},
     "js_path_used": {

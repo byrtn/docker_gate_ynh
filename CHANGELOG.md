@@ -7,9 +7,26 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
-## [1.0.1~ynh1] — 2026-07-18
+## [1.0.2~ynh1] — 2026-07-18
+
+### Added
+- The "Analyze" step now recognizes a short list of known SPA-type images
+  (Portainer, Dashy, Heimdall, Homepage, Homarr, Organizr, Flame) and
+  automatically pre-selects "dedicated subdomain" mode for them, instead of
+  only showing generic help text and relying on the user to notice it.
+  Found the hard way: Dashy was installed in "path" mode during a live
+  screenshot session, resulting in a stuck loading screen (the exact same
+  class of problem Portainer had hit earlier).
 
 ### Changed
+- The self-signed-certificate warning shown after installing on a
+  dedicated subdomain used to be one dense paragraph covering the DNS
+  check, the TLS-passthrough/relay check, and the "just retry" tip all at
+  once — easy to skim past. Split into 4 separate bullets (one per point)
+  so each shows as its own line in the install summary. Prompted by a real
+  troubleshooting session where the TLS-passthrough hint was in fact
+  already present in the warning text, but got lost in the wall of text
+  and only found much later.
 - Version renumbered from `1.6~ynh4` down to `1.0.1~ynh1`, Patrick's
   decision right before submitting the app to the YunoHost community
   catalog: `1.6` felt presumptuous for a first public submission, so this

@@ -38,6 +38,32 @@ DATA_FILE = Path(__file__).parent / "data" / "apps.json"
 PORT_RANGE_START = 9100
 PORT_RANGE_END = 9999
 
+# Known SPA-type (Single Page Application) images that don't work when
+# exposed under a subpath — added 2026-07-18 after a real installation
+# mistake (Dashy installed in "path" mode, stuck on a blank loading screen)
+# that repeated a problem already known from Portainer (see mode_help in
+# i18n.py). The existing help text only warns generically; this list lets
+# the interface proactively pre-select "dedicated subdomain" mode instead
+# of relying on the user noticing and reading that text. Best-effort,
+# substring match against the image name — not exhaustive, new entries can
+# be added here as they're found.
+KNOWN_SPA_IMAGES = (
+    "portainer",
+    "dashy",
+    "heimdall",
+    "homepage",
+    "homarr",
+    "organizr",
+    "flame",
+)
+
+
+def _looks_like_spa(image):
+    if not image:
+        return False
+    image_lower = image.lower()
+    return any(name in image_lower for name in KNOWN_SPA_IMAGES)
+
 # Logo applied to every container exposed via "redirect" (workstream 1,
 # 2026-07-16) — same 2 YunoHost mechanisms as for Docker Gate itself (see
 # scripts/install), applied here to the created "redirect" instance.
@@ -331,25 +357,32 @@ def smart_parse_input(text, lang):
     'docker run' command, a docker-compose.yml, or just an image name —
     and calls the right parser. "Zero-form" philosophy decided on
     2026-07-13: one single box to fill in, not three different formats to
-    choose between yourself."""
+    choose between yourself.
+
+    Also adds a "suggested_mode" key (2026-07-18, see KNOWN_SPA_IMAGES
+    above) when the detected image is a known SPA — the add.html page
+    uses it to pre-select "dedicated subdomain" mode instead of leaving
+    the user to notice and read the generic help text."""
     stripped = text.strip()
     if not stripped:
         raise DockerConnectorError(t("err_nothing_to_analyze", lang))
 
     if stripped.startswith("docker "):
-        return parse_docker_run_command(stripped, lang)
-
+        result = parse_docker_run_command(stripped, lang)
     # A docker-compose.yml almost always contains at least one line break
     # and a "services:" or "image:" structure. A plain image name, on the
     # other hand, fits on a single line without a ':' followed by a space.
-    if "\n" in stripped or stripped.lstrip().startswith(("services:", "image:")):
-        return parse_compose_snippet(stripped, lang)
-
+    elif "\n" in stripped or stripped.lstrip().startswith(("services:", "image:")):
+        result = parse_compose_snippet(stripped, lang)
     # Otherwise: probably just an image name (e.g. "vaultwarden/server:latest").
-    if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/-]*(:[a-zA-Z0-9._-]+)?", stripped):
-        return inspect_docker_image(stripped, lang)
+    elif re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/-]*(:[a-zA-Z0-9._-]+)?", stripped):
+        result = inspect_docker_image(stripped, lang)
+    else:
+        raise DockerConnectorError(t("err_unrecognized_format", lang))
 
-    raise DockerConnectorError(t("err_unrecognized_format", lang))
+    if _looks_like_spa(result.get("image")):
+        result["suggested_mode"] = "subdomain"
+    return result
 
 
 def parse_compose_snippet(text, lang):
@@ -731,7 +764,13 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         # above, warning already added at that point) — don't duplicate a
         # second warning for the same failure.
         if ca_type and ca_type != "letsencrypt":
+            # Split into 4 separate bullets (2026-07-18, Patrick's feedback)
+            # instead of one dense paragraph — each check gets its own line
+            # in the install summary so none of them gets skipped over.
             warnings.append(t("warn_cert_not_letsencrypt", lang, domain=target_domain, ca_type=ca_type))
+            warnings.append(t("warn_cert_check_dns", lang, domain=target_domain))
+            warnings.append(t("warn_cert_check_passthrough", lang, domain=target_domain))
+            warnings.append(t("warn_cert_retry_tip", lang))
     else:
         target_domain = domain
         target_path = path if path.startswith("/") else f"/{path}"
