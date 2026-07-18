@@ -7,6 +7,16 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.1~ynh1] — 2026-07-18
+
+### Added
+- App version now shown in the footer.
+
+### Changed
+- Footer wording: "A BYRTN product" replaced by "Docker Gate v{version} ·
+  © BYRTN" (real copyright sign instead of a plain dash standing in for
+  one), tagline "souveraineté numérique" kept unchanged.
+
 ## [1.0~ynh1] — 2026-07-18
 
 ### Changed

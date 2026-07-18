@@ -37,6 +37,12 @@ CSRF_PROTECTED_ENDPOINTS = {
 LANG_COOKIE_NAME = "docker_gate_lang"
 LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 an
 
+# Version affichée dans le footer (base.html) — tenue à jour manuellement en
+# même temps que `version` dans manifest.toml (partie avant `~ynh`), pas
+# lue dynamiquement pour éviter une dépendance de parsing au manifeste au
+# runtime pour un simple affichage.
+APP_VERSION = "1.1"
+
 app = Flask(__name__)
 
 
@@ -116,6 +122,7 @@ def _get_csrf_token():
 app.jinja_env.globals["csrf_token"] = _get_csrf_token
 app.jinja_env.globals["t"] = lambda key, **kwargs: i18n.t(key, get_lang(), **kwargs)
 app.jinja_env.globals["current_lang"] = get_lang
+app.jinja_env.globals["app_version"] = APP_VERSION
 
 
 @app.before_request
