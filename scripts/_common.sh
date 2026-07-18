@@ -23,7 +23,7 @@ ynh_docker_gate__ensure_docker_installed() {
     ynh_print_info --message="Installation de Docker CE..."
 
     ynh_apt update
-    ynh_apt install --package="ca-certificates curl gnupg"
+    ynh_apt install ca-certificates curl gnupg
 
     install -m 0755 -d /etc/apt/keyrings
     if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
@@ -39,7 +39,7 @@ ynh_docker_gate__ensure_docker_installed() {
         | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
     ynh_apt update
-    ynh_apt install --package="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+    ynh_apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     systemctl enable --now docker
 

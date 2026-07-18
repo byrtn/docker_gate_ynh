@@ -7,6 +7,20 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.2~ynh1] — 2026-07-18
+
+### Fixed
+- Fresh Docker CE installation was completely broken: `ynh_apt install
+  --package="..."` is not valid syntax (`ynh_apt install` forwards its
+  arguments straight to `apt-get install`, which has no `--package` option) —
+  every install attempt on a machine without Docker already present crashed
+  immediately. This had never been caught before because every previous test
+  ran on a machine where Docker CE was already installed (the early-return
+  guard in `ynh_docker_gate__ensure_docker_installed` skipped the broken code
+  entirely). Found during a full from-scratch reinstall test (Docker CE
+  purged beforehand on purpose). Fixed by passing the package list directly
+  instead of through a nonexistent `--package=` flag.
+
 ## [1.1~ynh1] — 2026-07-18
 
 ### Added
