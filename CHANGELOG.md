@@ -7,6 +7,20 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.3~ynh1] — 2026-07-18
+
+### Fixed
+- False "Let's Encrypt certificate not obtained" warning when reusing an
+  existing dedicated subdomain that already had a valid certificate:
+  `yunohost domain cert install` exits non-zero when a valid certificate
+  already exists (not an error in that case), but the warning was raised
+  from that exit code alone, ignoring the real certificate status checked
+  right after. Now based solely on the real check (`domain cert status`).
+  Found while reinstalling Portainer as a Docker Gate child app on
+  `portainer.wappos.fr`, a subdomain that already had a valid certificate.
+- Removed the now-dead `warn_cert_not_obtained` i18n string (its content is
+  already covered by `warn_cert_not_letsencrypt` for genuine failures).
+
 ## [1.2~ynh1] — 2026-07-18
 
 ### Fixed

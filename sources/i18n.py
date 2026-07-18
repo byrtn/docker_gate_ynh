@@ -143,29 +143,6 @@ STRINGS = {
         "en": "Web diagnosis failed for {domain} — the app might not be reachable until this is resolved.",
         "fr": "Diagnostic Web en échec pour {domain} — l'app pourrait ne pas être joignable tant que ce point n'est pas résolu.",
     },
-    "warn_cert_not_obtained": {
-        "en": (
-            "Let's Encrypt certificate not obtained for {domain} — the app is already created and working. "
-            "If your DNS zone isn't configured with your registrar yet, now is the time to do it. If this server "
-            "is behind a relay/reverse-proxy TLS-passthrough (another server that receives public traffic and "
-            "forwards it here), also remember to declare this domain on that relay (YunoHost tls_passthrough_list "
-            "setting, or equivalent depending on your relay) — otherwise Let's Encrypt validation cannot reach it. "
-            "Then request the certificate again from the YunoHost admin panel (Domains > {domain} > Certificate) — "
-            "YunoHost NEVER does this automatically for a domain left self-signed, only to renew an already-valid "
-            "certificate. If DNS and any relay were already fine, a simple retry is usually enough."
-        ),
-        "fr": (
-            "Certificat Let's Encrypt non obtenu pour {domain} — l'app est déjà créée et fonctionnelle. Si ta zone "
-            "DNS n'est pas encore paramétrée chez ton registrar, c'est le moment de le faire. Si ce serveur est "
-            "derrière un relais/reverse-proxy TLS-passthrough (un autre serveur qui reçoit le trafic public et le "
-            "redirige vers celui-ci), pense aussi à déclarer ce domaine sur ce relais (réglage YunoHost "
-            "tls_passthrough_list, ou équivalent selon ton relais) — sinon la validation Let's Encrypt ne peut pas "
-            "l'atteindre. Puis redemande le certificat depuis l'admin YunoHost (Domaines > {domain} > Certificat) — "
-            "YunoHost ne le fait JAMAIS tout seul pour un domaine resté en auto-signé, seulement pour renouveler un "
-            "certificat déjà valide. Si le DNS et le relais éventuel étaient déjà bons, un simple nouvel essai "
-            "suffit généralement."
-        ),
-    },
     "err_verify_cert_status": {
         "en": "Unable to verify the certificate status for {domain}.",
         "fr": "Impossible de vérifier le statut du certificat pour {domain}.",

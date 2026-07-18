@@ -695,18 +695,28 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             warnings.append(t("warn_web_diag_failed", lang, domain=target_domain))
 
         step("step_get_cert")
-        cert_install = subprocess.run(
+        # `yunohost domain cert install` échoue avec un code non nul si un
+        # certificat valide existe déjà sur ce domaine (cas normal du mode
+        # "réutiliser ce sous-domaine existant") — ce n'est pas une vraie
+        # erreur en soi, donc son code de retour n'est volontairement pas
+        # utilisé ici pour décider d'avertir ou non (voir plus bas, trouvé
+        # le 18/07/2026 : le cas de réutilisation déclenchait un faux
+        # avertissement "certificat non obtenu" alors que le certificat
+        # existant restait valide de bout en bout).
+        subprocess.run(
             ["/usr/bin/sudo", "-n", "yunohost", "domain", "cert", "install", target_domain],
             capture_output=True, text=True, timeout=180,
         )
-        if cert_install.returncode != 0:
-            warnings.append(t("warn_cert_not_obtained", lang, domain=target_domain))
 
-        # yunohost domain cert install peut renvoyer un code de sortie 0 sans
-        # avoir réellement installé de certificat Let's Encrypt (bug YunoHost :
-        # continue silencieux quand le domaine n'est pas encore prêt pour ACME —
-        # découvert le 13/07/2026 sur test1.wappos.fr, DNS absent chez OVH).
-        # On vérifie donc le résultat réel plutôt que le seul code de retour.
+        # Seule la vérification réelle de l'état du certificat fait foi,
+        # jamais le seul code de retour de la commande d'installation
+        # ci-dessus : `cert install` peut renvoyer 0 sans avoir réellement
+        # installé de certificat Let's Encrypt (bug YunoHost : continue
+        # silencieux quand le domaine n'est pas encore prêt pour ACME —
+        # découvert le 13/07/2026 sur test1.wappos.fr, DNS absent chez OVH),
+        # ET peut renvoyer un code non nul alors que tout va bien (cas de
+        # réutilisation d'un domaine ayant déjà un certificat valide,
+        # trouvé le 18/07/2026 sur portainer.wappos.fr).
         step("step_check_cert")
         try:
             cert_check_output = _run_sudo(
@@ -722,6 +732,10 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             warnings.append(t("warn_verify_cert_failed", lang, domain=target_domain, error=e))
             ca_type = None
 
+        # ca_type is None uniquement quand la vérification elle-même a
+        # échoué (exception ci-dessus, avertissement déjà ajouté à ce
+        # moment-là) — ne pas dupliquer un second avertissement pour le
+        # même échec.
         if ca_type and ca_type != "letsencrypt":
             warnings.append(t("warn_cert_not_letsencrypt", lang, domain=target_domain, ca_type=ca_type))
     else:
