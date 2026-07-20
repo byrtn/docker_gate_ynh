@@ -7,6 +7,13 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.1.1~ynh1] — 2026-07-20
+
+### Changed
+- **Multi-container creation/removal now goes through the real `docker compose` CLI** instead of a hand-rolled Docker SDK orchestration (network creation, per-container network aliasing, a bespoke 3-block rollback tree). Patrick's review after the first version shipped: that code reimplemented what Compose already does natively, with its own bug surface (two real bugs were found and fixed the same evening). A minimal, controlled `docker-compose.yml` is generated per app from the already-parsed fields only (image/port/volume/env — never the user's raw pasted text, a deliberate security boundary: `build`, `privileged`, `cap_add`, `devices`, `network_mode: host`, `secrets`, `extends` are never read by the parser, so they can never reach the generated file either). Every container/volume/network name stays forced to the exact `docker-gate-{slug}[-{service_key}]` convention the Audit page already expects — zero change there. Apps created before this change (e.g. pre-existing Portainer/Dashy) keep working through the old removal code, kept as a fallback path, no forced migration.
+- `docker compose up -d --wait` now actually waits for containers to be healthy/running before exposing the app via YunoHost — the previous SDK-based flow never waited at all.
+- `docker compose up --pull missing` replaces the hand-rolled "pull if missing" check (itself a same-day fix) — one less custom code path talking to the registry.
+
 ## [1.1.0~ynh1] — 2026-07-20
 
 ### Added

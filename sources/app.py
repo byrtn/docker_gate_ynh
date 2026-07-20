@@ -42,7 +42,7 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # `version` in manifest.toml (the part before `~ynh`), not parsed
 # dynamically to avoid a manifest-parsing dependency at runtime for a
 # simple display.
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 app = Flask(__name__)
 
@@ -199,7 +199,7 @@ def add():
         domains = ynh_manager.existing_domains(lang)
         return render_template("add.html", domains=domains, error=str(e), form=request.form)
 
-    steps = ynh_manager.build_create_steps(mode, has_data=bool(data_path), has_companions=bool(companions))
+    steps = ynh_manager.build_create_steps(mode)
     job_id = progress.create_job(steps)
 
     def run_creation():

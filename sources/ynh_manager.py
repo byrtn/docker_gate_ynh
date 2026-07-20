@@ -621,14 +621,14 @@ def parse_env_vars_text(text, lang):
     return env
 
 
-def build_create_steps(mode, has_data, has_companions=False):
+def build_create_steps(mode):
     """Builds the ordered list of planned step KEYS for a creation,
-    depending on the mode, whether persistent data was requested, and
-    whether this is a multi-container creation (has_companions, semi-
-    piloted mode decided 2026-07-20 — see create_docker_app's `companions`
-    parameter). Used both to prepare the progress display AND by
-    create_docker_app to report its real progress — the two can therefore
-    never fall out of sync.
+    depending only on the mode now (2026-07-20 rewrite: creation always
+    goes through the same `docker compose` flow — writing the file then
+    `up` — regardless of single vs multi-container, so there's no more
+    has_data/has_companions branching to keep in sync here). Used both to
+    prepare the progress display AND by create_docker_app to report its
+    real progress — the two can therefore never fall out of sync.
 
     Returns stable keys (i18n.STRINGS), never directly displayable text —
     translation happens at display time (progress.html), never here (these
@@ -643,11 +643,7 @@ def build_create_steps(mode, has_data, has_companions=False):
             "step_get_cert",
             "step_check_cert",
         ]
-    if has_data:
-        steps.append("step_create_volume")
-    if has_companions:
-        steps += ["step_create_network", "step_run_companions"]
-    steps += ["step_run_container", "step_expose_app"]
+    steps += ["step_write_compose", "step_compose_up", "step_expose_app"]
     return steps
 
 
@@ -720,115 +716,102 @@ def check_path_status(domain, path, lang):
     return {"status": "free", "domain": domain, "path": normalized_path}
 
 
-def _ensure_image_pulled(image, lang):
-    """Pulls the image if it isn't already present locally. Needed before
-    any containers.create() call: unlike containers.run() (used for the
-    ordinary single-container path), containers.create() does NOT pull a
-    missing image on its own — found the hard way testing the Immich
-    multi-container compose live on wappos-lab (2026-07-20): the very
-    first companion failed with a 404 'No such image' because create()
-    never even tried to fetch it."""
+def _compose_dir(slug):
+    """Directory holding the generated docker-compose.yml for an app —
+    same on-disk pattern as DATA_FILE (module-relative data/ dir)."""
+    return Path(__file__).parent / "data" / "compose" / slug
+
+
+def _build_compose_document(slug, main_key, image, container_port, host_port, env_vars, data_path, companions):
+    """Builds the compose document (a plain dict, dumped to YAML by the
+    caller) for a Docker Gate app — one service or several.
+
+    Security boundary (2026-07-20, replacing the earlier hand-rolled SDK
+    orchestration — see create_docker_app's docstring): this is built
+    ONLY from already-parsed, already-validated fields (image/port/volume/
+    env per service, produced by parse_compose_snippet/smart_parse_input)
+    — NEVER from the user's raw pasted text. Keys with real risk on a
+    shared host (build, privileged, cap_add, devices, network_mode: host,
+    secrets, configs, extends) are never read by the parser in the first
+    place, so they can never end up here either, no matter what a pasted
+    compose file contains.
+
+    Every app — single container or multi — gets its own network and its
+    own container_name/volume name(s), forced to the exact
+    'docker-gate-{slug}[-{service_key}]' convention the audit functions
+    (find_orphan_*) already expect, regardless of what Compose's own
+    default project-based naming would have produced."""
+    services = {}
+    volumes = {}
+
+    main_service = {
+        "image": image,
+        "container_name": f"docker-gate-{slug}",
+        "restart": "unless-stopped",
+        "ports": [f"127.0.0.1:{host_port}:{container_port}/tcp"],
+    }
+    if env_vars:
+        main_service["environment"] = env_vars
+    if data_path:
+        volume_name = f"docker-gate-{slug}-data"
+        volumes[volume_name] = {"name": volume_name}
+        main_service["volumes"] = [f"{volume_name}:{data_path}"]
+    if companions:
+        main_service["depends_on"] = [c["service_key"] for c in companions]
+    services[main_key] = main_service
+
+    for c in companions:
+        service_key = c["service_key"]
+        companion_service = {
+            "image": c["image"],
+            "container_name": f"docker-gate-{slug}-{service_key}",
+            "restart": "unless-stopped",
+        }
+        if c.get("env_vars"):
+            companion_service["environment"] = c["env_vars"]
+        if c.get("data_path"):
+            volume_name = f"docker-gate-{slug}-{service_key}-data"
+            volumes[volume_name] = {"name": volume_name}
+            companion_service["volumes"] = [f"{volume_name}:{c['data_path']}"]
+        services[service_key] = companion_service
+
+    doc = {"services": services, "networks": {"default": {"name": f"docker-gate-{slug}-net"}}}
+    if volumes:
+        doc["volumes"] = volumes
+    return doc
+
+
+def _run_docker_compose(project_name, compose_path, args, error_message, lang, timeout=180):
+    """Runs `docker compose -p <project> -f <file> <args>`. Mirrors
+    _run_sudo's style (readable DockerConnectorError with the real stderr
+    on failure) but needs no sudo rule: the app's system user is already a
+    member of the `docker` group (see conf/docker_gate.sudoers header +
+    `usermod -aG docker` in scripts/install), so the CLI talks to the
+    Docker socket exactly like the SDK calls it replaces used to."""
+    result = subprocess.run(
+        ["docker", "compose", "-p", project_name, "-f", str(compose_path)] + args,
+        capture_output=True, text=True, timeout=timeout,
+    )
+    if result.returncode != 0:
+        raise DockerConnectorError(
+            t("err_sudo_detail", lang, message=error_message, detail=result.stderr.strip() or result.stdout.strip())
+        )
+    return result.stdout
+
+
+def _teardown_compose_project(project_name, compose_path):
+    """Best-effort `docker compose down -v` after a failed `up` — a SINGLE
+    call now handles what used to be 3 separate hand-rolled rollback
+    blocks (companions, network, volume). Errors swallowed on purpose:
+    runs while another DockerConnectorError is already about to be
+    raised/re-raised; the Audit page can find and report any residue this
+    leaves behind, same philosophy as the rest of this module."""
     try:
-        docker_client.images.get(image)
-    except docker.errors.ImageNotFound:
-        try:
-            docker_client.images.pull(image)
-        except docker.errors.APIError as e:
-            raise DockerConnectorError(t("err_pull_image", lang, image=image, error=e))
-
-
-def _start_companion_containers(slug, network, companions, lang):
-    """Creates and starts every companion container (database, cache...)
-    of a multi-container app, connected to the given network under an
-    alias equal to their own compose service_key (see create_docker_app's
-    docstring). Returns the list of companion entries actually created —
-    used both for the state file and, on a later failure, to know exactly
-    what to tear down. Raises DockerConnectorError on the first failure;
-    the caller is responsible for rolling back what this function already
-    created (it does NOT clean up after itself, consistent with the
-    existing rollback style in create_docker_app, all handled by the
-    caller in one place)."""
-    created = []
-    try:
-        for companion in companions:
-            service_key = companion["service_key"]
-            container_name = f"docker-gate-{slug}-{service_key}"
-            _ensure_image_pulled(companion["image"], lang)
-            volume_name = None
-            if companion.get("data_path"):
-                volume_name = f"docker-gate-{slug}-{service_key}-data"
-                try:
-                    docker_client.volumes.create(name=volume_name)
-                except docker.errors.APIError as e:
-                    raise DockerConnectorError(t("err_run_companion_container", lang, service=service_key, error=e)) from e
-
-            create_kwargs = dict(name=container_name, detach=True, restart_policy={"Name": "always"})
-            if companion.get("env_vars"):
-                create_kwargs["environment"] = companion["env_vars"]
-            if volume_name:
-                create_kwargs["volumes"] = {volume_name: {"bind": companion["data_path"], "mode": "rw"}}
-
-            try:
-                container = docker_client.containers.create(companion["image"], **create_kwargs)
-                network.connect(container, aliases=[service_key] if service_key else None)
-                container.start()
-            except docker.errors.APIError as e:
-                if volume_name:
-                    try:
-                        docker_client.volumes.get(volume_name).remove()
-                    except docker.errors.NotFound:
-                        pass
-                raise DockerConnectorError(t("err_run_companion_container", lang, service=service_key, error=e)) from e
-
-            created.append({
-                "service_key": service_key,
-                "container_name": container_name,
-                "image": companion["image"],
-                "volume_name": volume_name,
-                "data_path": companion.get("data_path"),
-                "env_var_keys": sorted(companion["env_vars"].keys()) if companion.get("env_vars") else [],
-            })
-    except DockerConnectorError:
-        # A later companion failed — tear down every companion already
-        # started before this one, so the caller only has to worry about
-        # the network and the main app's own volume (see create_docker_app).
-        _teardown_companions(created)
-        raise
-    return created
-
-
-def _teardown_companions(companion_entries):
-    """Best-effort removal of already-created companion containers/volumes
-    — used on rollback when a later step of create_docker_app fails.
-    Errors are swallowed here on purpose: this runs while another
-    DockerConnectorError is already about to be raised/re-raised, and the
-    Audit page can find and report any residue this leaves behind."""
-    for c in companion_entries:
-        try:
-            container = docker_client.containers.get(c["container_name"])
-            container.stop()
-            container.remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError:
-            pass
-        if c.get("volume_name"):
-            try:
-                docker_client.volumes.get(c["volume_name"]).remove()
-            except docker.errors.NotFound:
-                pass
-            except docker.errors.APIError:
-                pass
-
-
-def _teardown_network(network_name):
-    """Best-effort removal of a just-created Docker network on rollback —
-    same swallow-errors philosophy as _teardown_companions."""
-    try:
-        docker_client.networks.get(network_name).remove()
-    except docker.errors.NotFound:
-        pass
-    except docker.errors.APIError:
+        subprocess.run(
+            ["docker", "compose", "-p", project_name, "-f", str(compose_path), "down", "-v"],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError):
         pass
 
 
@@ -879,18 +862,30 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     relaunching the install with this parameter just picks up right after,
     without starting over.
 
-    companions (optional, semi-piloted multi-container mode decided with
-    Patrick on 2026-07-20): list of dicts {service_key, image, data_path,
-    env_vars} for the OTHER services of a multi-service docker-compose.yml
-    (e.g. a database, a cache) that must run alongside the main container
-    on a dedicated Docker network, without any YunoHost/SSO exposure or
-    published port. main_service_key is the original compose key of the
-    exposed service itself. Every container (main + companions) is
-    connected to that network with a Docker network ALIAS equal to its own
-    original compose service_key — this is what lets env vars extracted
-    verbatim from the compose (e.g. DATABASE_URL=postgres://user:pass@db/db)
-    keep resolving correctly with zero rewriting, since "db" was also the
-    compose key of the companion now aliased "db" on the network.
+    companions (optional, semi-piloted multi-container mode, 2026-07-20):
+    list of dicts {service_key, image, data_path, env_vars} for the OTHER
+    services of a multi-service docker-compose.yml (e.g. a database, a
+    cache) that must run alongside the main container on a dedicated
+    Docker network, without any YunoHost/SSO exposure or published port.
+    main_service_key is the original compose key of the exposed service
+    itself (defaults to "app" when the input wasn't a multi-service
+    compose, e.g. a plain image or a `docker run` command).
+
+    Implementation (rewritten 2026-07-20, following Patrick's review — see
+    docs/CARNET-DE-BORD.md): rather than hand-rolling network creation,
+    per-container network aliasing and a bespoke rollback tree via the
+    Docker SDK, this generates a minimal docker-compose.yml (see
+    _build_compose_document) and drives it entirely through the real
+    `docker compose` CLI (see _run_docker_compose). Compose already gives
+    every service DNS resolution by its own service key on the project's
+    network for free — no manual aliasing code needed — and a single
+    `docker compose down -v` cleanly undoes a failed `up`, replacing 3
+    separate rollback blocks. Every container/volume/network name is
+    forced to the exact 'docker-gate-{slug}[-{service_key}]' convention
+    the audit functions already expect, so env vars copied verbatim from
+    the source compose (e.g. DATABASE_URL=postgres://user:pass@db/db)
+    keep resolving correctly with zero rewriting — "db" is both the
+    compose service key and its own DNS name on the network.
 
     Raises DockerConnectorError with a clear message at every step that can
     genuinely fail in a blocking way (invalid parameters, unavailable port,
@@ -1038,98 +1033,56 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         else:
             env_vars[url_env_var] = f"https://{target_domain}{target_path}"
 
-    # --- Persistent data volume (optional) ---
-    volume_name = None
-    if data_path:
-        step("step_create_volume")
-        volume_name = f"docker-gate-{slug}-data"
-        try:
-            docker_client.volumes.create(name=volume_name)
-        except docker.errors.APIError as e:
-            raise DockerConnectorError(t("err_create_volume", lang, error=e))
+    # --- Compose project: one docker-compose.yml per app, driven by the
+    # real `docker compose` CLI (see this function's docstring,
+    # _build_compose_document and _run_docker_compose) ---
+    main_key = main_service_key or "app"
+    project_name = f"docker-gate-{slug}"
+    compose_path = _compose_dir(slug) / "docker-compose.yml"
 
-    # --- Dedicated network + companion containers (semi-piloted
-    # multi-container mode, decided with Patrick on 2026-07-20 — see this
-    # function's docstring) ---
-    network = None
-    network_name = None
-    companion_entries = []
-    if companions:
-        step("step_create_network")
-        network_name = f"docker-gate-{slug}-net"
-        try:
-            network = docker_client.networks.create(network_name, driver="bridge")
-        except docker.errors.APIError as e:
-            if volume_name:
-                try:
-                    docker_client.volumes.get(volume_name).remove()
-                except docker.errors.NotFound:
-                    pass
-            raise DockerConnectorError(t("err_create_network", lang, error=e))
-
-        step("step_run_companions")
-        try:
-            companion_entries = _start_companion_containers(slug, network, companions, lang)
-        except DockerConnectorError:
-            _teardown_network(network_name)
-            if volume_name:
-                try:
-                    docker_client.volumes.get(volume_name).remove()
-                except docker.errors.NotFound:
-                    pass
-            raise
-
-    # --- Starting the Docker container ---
-    step("step_run_container")
-    container_name = f"docker-gate-{slug}"
-    run_kwargs = dict(
-        name=container_name,
-        detach=True,
-        restart_policy={"Name": "always"},
-        ports={f"{container_port}/tcp": ("127.0.0.1", host_port)},
+    step("step_write_compose")
+    compose_doc = _build_compose_document(
+        slug=slug, main_key=main_key, image=image, container_port=container_port,
+        host_port=host_port, env_vars=env_vars, data_path=data_path, companions=companions or [],
     )
-    if env_vars:
-        run_kwargs["environment"] = env_vars
-    if volume_name:
-        run_kwargs["volumes"] = {volume_name: {"bind": data_path, "mode": "rw"}}
-
     try:
-        if network:
-            # Created (not run()) so it can be explicitly connected to the
-            # dedicated network with an alias BEFORE starting — docker-py's
-            # containers.run() doesn't expose network aliases, only a bare
-            # network name (see _start_companion_containers, same reasoning).
-            # containers.create() doesn't auto-pull a missing image the way
-            # run() does, hence the explicit pull here (same bug found live
-            # on the Immich companions, see _ensure_image_pulled).
-            _ensure_image_pulled(image, lang)
-            container = docker_client.containers.create(image, **run_kwargs)
-            network.connect(container, aliases=[main_service_key] if main_service_key else None)
-            container.start()
-        else:
-            docker_client.containers.run(image, **run_kwargs)
-    except (docker.errors.APIError, DockerConnectorError) as e:
-        # Audit workstream 5 (2026-07-17): the volume may have just been
-        # created above (data_path provided) — before this fix, a failure
-        # HERE left that volume orphaned with no cleanup attempt at all,
-        # even though the same volume is cleaned up further below if it's
-        # the exposure step that fails instead. Inconsistency fixed: same
-        # defensive gesture as on exposure, for a failure at this step.
-        # Also catches DockerConnectorError from _ensure_image_pulled above
-        # (missing image on a multi-container creation) — same rollback
-        # applies regardless of which of the two failed.
-        if volume_name:
-            try:
-                docker_client.volumes.get(volume_name).remove()
-            except docker.errors.NotFound:
-                pass
-        if companion_entries:
-            _teardown_companions(companion_entries)
-        if network_name:
-            _teardown_network(network_name)
-        if isinstance(e, DockerConnectorError):
-            raise
-        raise DockerConnectorError(t("err_run_container", lang, error=e))
+        compose_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(compose_path, "w") as f:
+            yaml.safe_dump(compose_doc, f, sort_keys=False)
+    except OSError as e:
+        raise DockerConnectorError(t("err_write_compose", lang, error=e))
+
+    step("step_compose_up")
+    _run_docker_compose(
+        project_name, compose_path, ["config", "-q"],
+        t("err_compose_config_invalid", lang), lang, timeout=30,
+    )
+    try:
+        _run_docker_compose(
+            project_name, compose_path,
+            ["up", "-d", "--wait", "--wait-timeout", "120", "--pull", "missing"],
+            t("err_compose_up_failed", lang), lang, timeout=240,
+        )
+    except DockerConnectorError:
+        # A single `down -v` undoes whatever `up` managed to start before
+        # failing — no per-resource rollback bookkeeping needed anymore.
+        _teardown_compose_project(project_name, compose_path)
+        raise
+
+    container_name = f"docker-gate-{slug}"
+    volume_name = f"docker-gate-{slug}-data" if data_path else None
+    network_name = f"docker-gate-{slug}-net"
+    companion_entries = [
+        {
+            "service_key": c["service_key"],
+            "container_name": f"docker-gate-{slug}-{c['service_key']}",
+            "image": c["image"],
+            "volume_name": f"docker-gate-{slug}-{c['service_key']}-data" if c.get("data_path") else None,
+            "data_path": c.get("data_path"),
+            "env_var_keys": sorted(c["env_vars"].keys()) if c.get("env_vars") else [],
+        }
+        for c in (companions or [])
+    ]
 
     # --- Exposure via the official "redirect" app ---
     step("step_expose_app")
@@ -1158,22 +1111,8 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             lang,
         )
     except DockerConnectorError:
-        # Don't leave an orphaned container (or volume) if exposure fails.
-        try:
-            c = docker_client.containers.get(container_name)
-            c.stop()
-            c.remove()
-        except docker.errors.NotFound:
-            pass
-        if volume_name:
-            try:
-                docker_client.volumes.get(volume_name).remove()
-            except docker.errors.NotFound:
-                pass
-        if companion_entries:
-            _teardown_companions(companion_entries)
-        if network_name:
-            _teardown_network(network_name)
+        # Don't leave a running-but-unexposed app behind if exposure fails.
+        _teardown_compose_project(project_name, compose_path)
         raise
 
     apps_after = {a["id"] for a in json.loads(
@@ -1221,6 +1160,8 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         "env_var_keys": sorted(env_vars.keys()) if env_vars else [],
         "network_name": network_name,
         "companions": companion_entries,
+        "compose_project": project_name,
+        "compose_file": str(compose_path),
     }
     apps = _load_state()
     apps.append(entry)
@@ -1275,51 +1216,79 @@ def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
         except DockerConnectorError as e:
             warnings.append(str(e))
 
-    try:
-        container = docker_client.containers.get(entry["container_name"])
-        container.stop()
-        container.remove()
-    except docker.errors.NotFound:
-        pass
-    except docker.errors.APIError as e:
-        warnings.append(t("err_remove_container", lang, name=entry["container_name"], error=e))
-
-    if delete_data and entry.get("volume_name"):
+    if entry.get("compose_project"):
+        # Compose-based app (2026-07-20 rewrite): one call tears down the
+        # container(s), the dedicated network, and — with -v — the
+        # volume(s), all at once. Falls back to `-p <project>` alone
+        # (no -f) if the compose file went missing (e.g. manual tampering,
+        # data/ wiped by hand) — Compose can still find its own resources
+        # by their project label, same "never fail silently, always try
+        # the next best thing" spirit as the rest of this module.
+        compose_file = Path(entry["compose_file"]) if entry.get("compose_file") else None
+        down_args = ["down", "-v"] if delete_data else ["down"]
         try:
-            docker_client.volumes.get(entry["volume_name"]).remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError as e:
-            warnings.append(t("err_remove_volume", lang, name=entry["volume_name"], error=e))
-
-    # Companion containers/volumes (semi-piloted multi-container mode,
-    # 2026-07-20) — same best-effort philosophy, and same "never delete
-    # data unless explicitly asked" rule as the main app's own volume above.
-    for companion in entry.get("companions", []):
+            if compose_file and compose_file.exists():
+                _run_docker_compose(entry["compose_project"], compose_file, down_args, t("err_compose_down_failed", lang), lang)
+            else:
+                result = subprocess.run(
+                    ["docker", "compose", "-p", entry["compose_project"]] + down_args,
+                    capture_output=True, text=True, timeout=180,
+                )
+                if result.returncode != 0:
+                    raise DockerConnectorError(t("err_sudo_detail", lang, message=t("err_compose_down_failed", lang), detail=result.stderr.strip()))
+        except DockerConnectorError as e:
+            warnings.append(str(e))
+        if compose_file and compose_file.parent.exists():
+            try:
+                shutil.rmtree(compose_file.parent)
+            except OSError:
+                pass
+    else:
+        # Legacy path (apps created before this rewrite, e.g. pre-existing
+        # portainer/dashy on wappos-lab): same hand-rolled SDK removal as
+        # before, kept unchanged — no forced migration.
         try:
-            container = docker_client.containers.get(companion["container_name"])
+            container = docker_client.containers.get(entry["container_name"])
             container.stop()
             container.remove()
         except docker.errors.NotFound:
             pass
         except docker.errors.APIError as e:
-            warnings.append(t("err_remove_companion_container", lang, name=companion["container_name"], error=e))
+            warnings.append(t("err_remove_container", lang, name=entry["container_name"], error=e))
 
-        if delete_data and companion.get("volume_name"):
+        if delete_data and entry.get("volume_name"):
             try:
-                docker_client.volumes.get(companion["volume_name"]).remove()
+                docker_client.volumes.get(entry["volume_name"]).remove()
             except docker.errors.NotFound:
                 pass
             except docker.errors.APIError as e:
-                warnings.append(t("err_remove_companion_volume", lang, name=companion["volume_name"], error=e))
+                warnings.append(t("err_remove_volume", lang, name=entry["volume_name"], error=e))
 
-    if entry.get("network_name"):
-        try:
-            docker_client.networks.get(entry["network_name"]).remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError as e:
-            warnings.append(t("err_remove_network", lang, name=entry["network_name"], error=e))
+        for companion in entry.get("companions", []):
+            try:
+                container = docker_client.containers.get(companion["container_name"])
+                container.stop()
+                container.remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError as e:
+                warnings.append(t("err_remove_companion_container", lang, name=companion["container_name"], error=e))
+
+            if delete_data and companion.get("volume_name"):
+                try:
+                    docker_client.volumes.get(companion["volume_name"]).remove()
+                except docker.errors.NotFound:
+                    pass
+                except docker.errors.APIError as e:
+                    warnings.append(t("err_remove_companion_volume", lang, name=companion["volume_name"], error=e))
+
+        if entry.get("network_name"):
+            try:
+                docker_client.networks.get(entry["network_name"]).remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError as e:
+                warnings.append(t("err_remove_network", lang, name=entry["network_name"], error=e))
 
     if delete_domain and entry.get("mode") == "subdomain":
         try:
