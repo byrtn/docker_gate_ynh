@@ -75,6 +75,14 @@ STRINGS = {
         "en": "Unable to find the image name in this command.",
         "fr": "Impossible de trouver le nom de l'image dans cette commande.",
     },
+    "err_docker_run_duplicate_port": {
+        "en": "This command publishes more than one port — only the first one was kept, check the others manually.",
+        "fr": "Cette commande publie plusieurs ports — seul le premier a été retenu, vérifiez les autres manuellement.",
+    },
+    "err_docker_run_duplicate_volume": {
+        "en": "This command mounts more than one volume — only the first one was kept, check the others manually.",
+        "fr": "Cette commande monte plusieurs volumes — seul le premier a été retenu, vérifiez les autres manuellement.",
+    },
     "err_nothing_to_analyze": {
         "en": "Nothing to analyze — paste an image, a docker run command, or a docker-compose.yml.",
         "fr": "Rien à analyser — colle une image, une commande docker run, ou un docker-compose.yml.",
@@ -102,6 +110,22 @@ STRINGS = {
     "err_nothing_extracted": {
         "en": "No usable information found (no image, port, volume, or environment variable) in this docker-compose.yml.",
         "fr": "Aucune information exploitable trouvée (ni image, ni port, ni volume, ni variable d'environnement) dans ce docker-compose.yml.",
+    },
+    "err_compose_unresolved_vars": {
+        "en": "This docker-compose.yml uses variable(s) without a default value ({vars}) — fill in the affected field(s) by hand.",
+        "fr": "Ce docker-compose.yml utilise des variables sans valeur par défaut ({vars}) — complétez le(s) champ(s) concerné(s) à la main.",
+    },
+    "err_compose_env_file_not_supported": {
+        "en": "This service uses 'env_file' — variables from that file aren't read automatically, add them manually if needed.",
+        "fr": "Ce service utilise 'env_file' — les variables de ce fichier ne sont pas lues automatiquement, ajoutez-les manuellement si besoin.",
+    },
+    "err_compose_multiple_ports": {
+        "en": "This service declares more than one port — only the first one was kept, check the others manually.",
+        "fr": "Ce service déclare plusieurs ports — seul le premier a été retenu, vérifiez les autres manuellement.",
+    },
+    "err_compose_multiple_volumes": {
+        "en": "This service declares more than one data volume — only the first one was kept, check the others manually.",
+        "fr": "Ce service déclare plusieurs volumes de données — seul le premier a été retenu, vérifiez les autres manuellement.",
     },
     "err_invalid_env_line": {
         "en": "Invalid line {line_no} in the environment variables: '{line}' (expected format: KEY=value).",
