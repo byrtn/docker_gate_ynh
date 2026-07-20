@@ -237,6 +237,39 @@ def fetch_compose_from_url(url, lang):
     return response.text
 
 
+_ENV_EXAMPLE_CANDIDATES = (".env.example", "example.env", ".env.sample", "env.example", ".env.dist", ".env.template")
+
+
+def fetch_env_example_from_url(compose_url, lang):
+    """Best-effort: looks for a sibling env-example file next to a
+    docker-compose.yml fetched by URL (same directory, common naming
+    conventions) and returns its raw text, or None if none is found.
+
+    Deliberately mechanical only, no per-app knowledge of ours (Patrick,
+    2026-07-20: "je ne veux pas maintenir un catalogue d'applications" —
+    Docker Hub already is one, and most real projects already publish an
+    example env file right next to their compose, e.g. Immich's
+    docker/example.env alongside docker/docker-compose.yml). We only ever
+    read what the upstream project already publishes, exactly the way a
+    human would open both files side by side — never our own data.
+
+    Never raises: a missing/unreachable example file is a normal case
+    (many projects don't have one, or don't use env_file: at all), not a
+    failure — the existing "add these variables manually" warning stays
+    the fallback."""
+    if not compose_url.startswith("https://"):
+        return None
+    base = compose_url.rsplit("/", 1)[0] + "/"
+    for name in _ENV_EXAMPLE_CANDIDATES:
+        try:
+            response = requests.get(base + name, timeout=5)
+        except requests.RequestException:
+            continue
+        if response.status_code == 200 and 0 < len(response.content) <= 50_000 and response.text.strip():
+            return response.text
+    return None
+
+
 def inspect_docker_image(image_name, lang):
     """Downloads (if needed) and inspects a Docker image to automatically
     guess its default port and volume, when the user only gives an image
@@ -279,21 +312,34 @@ _COMPOSE_VAR_PATTERN = re.compile(
 )
 
 
-def _substitute_compose_vars(text):
+def _substitute_compose_vars(text, defaults=None):
     """Best-effort resolution of docker-compose '${VAR}' interpolation
     (e.g. `image: vaultwarden/server:${TAG:-latest}`), which is extremely
     common in compose files pulled straight from a project's README.
 
-    We have no access to the user's real environment/.env, so only the
-    forms that carry an explicit default (${VAR:-default} / ${VAR-default})
-    can be resolved — the default is substituted in. Anything else
-    (${VAR}, ${VAR:?msg}, ${VAR?msg}) is left untouched (rule #1: never
-    invent a value) and its name is reported back so the caller can warn
-    the user instead of silently shipping a broken '${VAR}' string."""
+    We normally have no access to the user's real environment/.env, so
+    only the forms that carry an explicit default (${VAR:-default} /
+    ${VAR-default}) can be resolved — the default is substituted in.
+
+    defaults (optional, 2026-07-20): a dict of real values to try FIRST,
+    typically the sibling env-example file fetched alongside a compose
+    pulled from a URL (see fetch_env_example_from_url) — the same file a
+    real `docker compose` invocation would read its own '.env' from. Using
+    it here too means a bare '${DB_PASSWORD}' (no inline default) can
+    still resolve correctly when the upstream project already publishes
+    that default, instead of being left unresolved.
+
+    Anything still not covered by either (${VAR}, ${VAR:?msg}, ${VAR?msg})
+    is left untouched (rule #1: never invent a value) and its name is
+    reported back so the caller can warn the user instead of silently
+    shipping a broken '${VAR}' string."""
     unresolved = []
+    defaults = defaults or {}
 
     def _replace(match):
         name, operator, rest = match.group(1), match.group(2), match.group(3)
+        if name in defaults:
+            return defaults[name]
         if operator in (":-", "-"):
             return rest
         unresolved.append(name)
@@ -401,12 +447,17 @@ def parse_docker_run_command(text, lang):
     return result
 
 
-def smart_parse_input(text, lang):
+def smart_parse_input(text, lang, env_example_text=None):
     """Single entry point: automatically detects what the user pasted — a
     'docker run' command, a docker-compose.yml, or just an image name —
     and calls the right parser. "Zero-form" philosophy decided on
     2026-07-13: one single box to fill in, not three different formats to
     choose between yourself.
+
+    env_example_text (optional, 2026-07-20): raw content of a sibling
+    env-example file, when the input came from a URL (see
+    fetch_env_example_from_url and the /parse_input route) — forwarded to
+    parse_compose_snippet to fill in services that declare `env_file:`.
 
     Also adds a "suggested_mode" key (2026-07-18, see KNOWN_SPA_IMAGES
     above) when the detected image is a known SPA — the add.html page
@@ -422,7 +473,7 @@ def smart_parse_input(text, lang):
     # and a "services:" or "image:" structure. A plain image name, on the
     # other hand, fits on a single line without a ':' followed by a space.
     elif "\n" in stripped or stripped.lstrip().startswith(("services:", "image:")):
-        result = parse_compose_snippet(stripped, lang)
+        result = parse_compose_snippet(stripped, lang, env_example_text=env_example_text)
     # Otherwise: probably just an image name (e.g. "vaultwarden/server:latest").
     elif re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/-]*(:[a-zA-Z0-9._-]+)?", stripped):
         result = inspect_docker_image(stripped, lang)
@@ -457,18 +508,31 @@ def _is_internal_service_reference(url_value, sibling_service_keys):
     return host in sibling_service_keys
 
 
-def _extract_compose_service_fields(service, service_key, lang, sibling_service_keys=None):
+def _extract_compose_service_fields(service, service_key, lang, sibling_service_keys=None, env_example_vars=None):
     """Extracts image/port/data/env from a single compose service block —
     the exact same extraction rules regardless of whether the compose file
     declares one service or several (see parse_compose_snippet). Returns
-    (result_dict, warnings_list)."""
+    (result_dict, warnings_list).
+
+    env_example_vars (optional, 2026-07-20): a dict already parsed from a
+    sibling '.env.example'-style file fetched from the SAME upstream repo
+    as the compose (see fetch_env_example_from_url) — used as the
+    service's env_file contents when it declares `env_file:`. Deliberately
+    NOT a Docker Gate-maintained catalog (Patrick, 2026-07-20: "zéro
+    catalogue à maintenir") — purely mechanical: we only ever read what
+    the upstream project already publishes next to its own compose file,
+    the same way a human would open both files side by side."""
     result = {"image": None, "container_port": None, "data_path": None, "env_vars": None, "url_env_var": None,
               "service_key": service_key,
               "suggested_slug": service.get("container_name") or service_key}
     warnings = []
+    pairs = []
 
     if service.get("env_file"):
-        warnings.append(t("err_compose_env_file_not_supported", lang))
+        if env_example_vars:
+            pairs.extend(env_example_vars.items())
+        else:
+            warnings.append(t("err_compose_env_file_not_supported", lang))
 
     if "image" in service:
         result["image"] = str(service["image"])
@@ -507,15 +571,20 @@ def _extract_compose_service_fields(service, service_key, lang, sibling_service_
     environment = service.get("environment")
     if environment:
         # The docker-compose format accepts two equivalent syntaxes: a
-        # list ["KEY=value", ...] or a dict {KEY: value}.
-        pairs = []
+        # list ["KEY=value", ...] or a dict {KEY: value}. Appended AFTER
+        # any env_file-derived pairs above so an inline `environment:`
+        # value correctly overrides the same key from env_example_vars —
+        # same precedence real `docker compose` applies between env_file
+        # and environment.
         if isinstance(environment, list):
             for e in environment:
                 k, _, v = str(e).partition("=")
                 pairs.append((k.strip(), v.strip()))
         elif isinstance(environment, dict):
-            pairs = [(str(k), str(v)) for k, v in environment.items()]
+            pairs.extend((str(k), str(v)) for k, v in environment.items())
 
+    if pairs:
+        merged = dict(pairs)
         # Spot a possible "base URL" variable (a value that looks like a
         # web address, e.g. DOMAIN=https://vw.domain.tld) — this variable
         # doesn't need to be copied as-is: its real value will be computed
@@ -523,7 +592,7 @@ def _extract_compose_service_fields(service, service_key, lang, sibling_service_
         # (simplification requested by Patrick on 2026-07-13, to avoid
         # entering it twice by hand).
         other_lines = []
-        for key, value in pairs:
+        for key, value in merged.items():
             if (not result["url_env_var"] and re.match(r"^https?://", value)
                     and not _is_internal_service_reference(value, sibling_service_keys)):
                 result["url_env_var"] = key
@@ -597,7 +666,7 @@ def _autogenerate_secrets(parsed_services):
     return generated_labels
 
 
-def parse_compose_snippet(text, lang):
+def parse_compose_snippet(text, lang, env_example_text=None):
     """Extracts image/port/data from a docker-compose.yml snippet pasted by
     the user — many self-hosted projects publish a ready-made one (unlike
     the rest of their docs, often free-text, this format is structured and
@@ -608,6 +677,14 @@ def parse_compose_snippet(text, lang):
     the user to complete the rest if needed, no invented defaults out of
     thin air (rule #1: never state something that hasn't been verified).
 
+    env_example_text (optional, 2026-07-20): raw content of a sibling
+    env-example file fetched from the same upstream repo as the compose
+    (see fetch_env_example_from_url) — used to fill in any service that
+    declares `env_file:` instead of leaving it as a "add manually"
+    warning. Malformed content is ignored silently (best-effort — an
+    upstream formatting quirk must never block the analysis of an
+    otherwise valid compose).
+
     When the compose declares MORE THAN ONE service (e.g. an app + its
     database + a cache), every service is extracted and returned as a list
     under "multi_service"/"services" instead of picking just the first one
@@ -616,7 +693,14 @@ def parse_compose_snippet(text, lang):
     exposed via YunoHost/SSO, the others becoming internal companions (see
     create_docker_app's `companions` parameter, semi-piloted multi-container
     mode decided with Patrick on 2026-07-20)."""
-    text, unresolved_vars = _substitute_compose_vars(text)
+    env_example_vars = None
+    if env_example_text:
+        try:
+            env_example_vars = parse_env_vars_text(env_example_text, lang)
+        except DockerConnectorError:
+            pass
+
+    text, unresolved_vars = _substitute_compose_vars(text, defaults=env_example_vars)
 
     try:
         data = yaml.safe_load(text)
@@ -642,15 +726,21 @@ def parse_compose_snippet(text, lang):
     if len(services) > 1:
         all_service_keys = set(services.keys())
         parsed_services = []
+        env_example_applied = False
         for service_key, service in services.items():
             if not isinstance(service, dict):
                 raise DockerConnectorError(t("err_unrecognized_service_format", lang))
             sibling_keys = all_service_keys - {service_key}
-            service_result, service_warnings = _extract_compose_service_fields(service, service_key, lang, sibling_keys)
+            if env_example_vars and service.get("env_file"):
+                env_example_applied = True
+            service_result, service_warnings = _extract_compose_service_fields(
+                service, service_key, lang, sibling_keys, env_example_vars=env_example_vars)
             service_result["warnings"] = service_warnings
             parsed_services.append(service_result)
         if not any(s["image"] for s in parsed_services):
             raise DockerConnectorError(t("err_nothing_extracted", lang))
+        if env_example_applied:
+            compose_warnings.append(t("info_env_example_used", lang))
         generated = _autogenerate_secrets(parsed_services)
         if generated:
             compose_warnings.append(t("info_secrets_autogenerated", lang, list=", ".join(generated)))
@@ -660,7 +750,9 @@ def parse_compose_snippet(text, lang):
     if not isinstance(service, dict):
         raise DockerConnectorError(t("err_unrecognized_service_format", lang))
 
-    result, service_warnings = _extract_compose_service_fields(service, service_key, lang)
+    result, service_warnings = _extract_compose_service_fields(service, service_key, lang, env_example_vars=env_example_vars)
+    if env_example_vars and service.get("env_file"):
+        compose_warnings.append(t("info_env_example_used", lang))
 
     if not result["image"] and not result["container_port"] and not result["data_path"] and not result["env_vars"]:
         raise DockerConnectorError(t("err_nothing_extracted", lang))

@@ -262,16 +262,26 @@ def parse_input():
     payload = request.get_json(silent=True) or {}
     url = payload.get("url", "").strip()
 
+    env_example_text = None
     if url:
         try:
             raw_text = ynh_manager.fetch_compose_from_url(url, lang)
         except ynh_manager.DockerConnectorError as e:
             return jsonify({"ok": False, "error": str(e)})
+        # Best-effort: look for the project's own example env file next to
+        # the compose it was just fetched from (2026-07-20, Patrick: "je ne
+        # veux pas maintenir un catalogue" — this is purely mechanical, we
+        # only ever read what the upstream project already publishes).
+        # Never blocks the analysis if it errors or finds nothing.
+        try:
+            env_example_text = ynh_manager.fetch_env_example_from_url(url, lang)
+        except Exception:
+            env_example_text = None
     else:
         raw_text = payload.get("text", "")
 
     try:
-        result = ynh_manager.smart_parse_input(raw_text, lang)
+        result = ynh_manager.smart_parse_input(raw_text, lang, env_example_text=env_example_text)
         if url:
             result["raw_text"] = raw_text
         return jsonify({"ok": True, **result})
