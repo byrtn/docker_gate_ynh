@@ -27,6 +27,8 @@ STRINGS = {
     "step_get_cert": {"en": "Obtaining the Let's Encrypt certificate", "fr": "Obtention du certificat Let's Encrypt"},
     "step_check_cert": {"en": "Checking the obtained certificate", "fr": "Vérification du certificat obtenu"},
     "step_create_volume": {"en": "Creating the data volume", "fr": "Création du volume de données"},
+    "step_create_network": {"en": "Creating the app's dedicated network", "fr": "Création du réseau dédié de l'app"},
+    "step_run_companions": {"en": "Starting internal dependencies (database, cache...)", "fr": "Démarrage des dépendances internes (base de données, cache...)"},
     "step_run_container": {"en": "Starting the Docker container", "fr": "Lancement du conteneur Docker"},
     "step_expose_app": {"en": "Exposing via YunoHost (nginx + SSO)", "fr": "Exposition via YunoHost (nginx + SSO)"},
 
@@ -223,6 +225,14 @@ STRINGS = {
         "en": "Docker was unable to start the container: {error}",
         "fr": "Docker n'a pas pu lancer le conteneur : {error}",
     },
+    "err_create_network": {
+        "en": "Unable to create the app's dedicated Docker network: {error}",
+        "fr": "Impossible de créer le réseau Docker dédié de l'app : {error}",
+    },
+    "err_run_companion_container": {
+        "en": "Unable to start the internal dependency '{service}': {error}",
+        "fr": "Impossible de démarrer la dépendance interne '{service}' : {error}",
+    },
     "err_expose_app": {
         "en": "Exposing via the YunoHost 'redirect' app failed. The Docker container was started but isn't exposed yet.",
         "fr": "L'exposition via l'app YunoHost 'redirect' a échoué. Le conteneur Docker a été lancé mais n'est pas encore exposé.",
@@ -259,6 +269,18 @@ STRINGS = {
         "en": "Unable to remove the volume '{name}': {error}",
         "fr": "Impossible de supprimer le volume '{name}' : {error}",
     },
+    "err_remove_companion_container": {
+        "en": "Unable to remove the internal dependency container '{name}': {error}",
+        "fr": "Impossible de supprimer le conteneur de la dépendance interne '{name}' : {error}",
+    },
+    "err_remove_companion_volume": {
+        "en": "Unable to remove the internal dependency's volume '{name}': {error}",
+        "fr": "Impossible de supprimer le volume de la dépendance interne '{name}' : {error}",
+    },
+    "err_remove_network": {
+        "en": "Unable to remove the app's dedicated Docker network '{name}': {error}",
+        "fr": "Impossible de supprimer le réseau Docker dédié de l'app '{name}' : {error}",
+    },
     "err_remove_domain": {
         "en": (
             "Unable to remove the YunoHost domain {domain}. The app and container were removed successfully, "
@@ -276,6 +298,10 @@ STRINGS = {
     "err_volume_not_orphan": {
         "en": "This volume isn't recognized as an orphan, removal refused for safety.",
         "fr": "Ce volume n'est pas reconnu comme orphelin, suppression refusée par sécurité.",
+    },
+    "err_network_not_orphan": {
+        "en": "This network isn't recognized as an orphan, removal refused for safety.",
+        "fr": "Ce réseau n'est pas reconnu comme orphelin, suppression refusée par sécurité.",
     },
     "err_docker_ce_stop": {
         "en": "Unable to stop the Docker services.",
@@ -305,6 +331,7 @@ STRINGS = {
     "flash_domain_removed": {"en": "YunoHost domain also removed.", "fr": "Domaine YunoHost également supprimé."},
     "flash_orphan_container_removed": {"en": "Orphan container '{name}' removed.", "fr": "Conteneur orphelin '{name}' supprimé."},
     "flash_orphan_volume_removed": {"en": "Orphan volume '{name}' removed.", "fr": "Volume orphelin '{name}' supprimé."},
+    "flash_orphan_network_removed": {"en": "Orphan network '{name}' removed.", "fr": "Réseau orphelin '{name}' supprimé."},
     "flash_images_pruned": {"en": "Unused images cleaned up ({mb} MB freed).", "fr": "Images inutilisées nettoyées ({mb} Mo libérés)."},
     "flash_prune_error": {"en": "Error while cleaning up images: {error}", "fr": "Erreur lors du nettoyage des images : {error}"},
     "flash_progress_not_found": {
@@ -343,6 +370,10 @@ STRINGS = {
     "private_label": {"en": "private", "fr": "privé"},
     "users_label": {"en": "restricted (users)", "fr": "restreint (utilisateurs)"},
     "persistent_data_suffix": {"en": " — persistent data", "fr": " — données persistantes"},
+    "companions_summary": {
+        "en": "+ {count} internal service(s): {names}",
+        "fr": "+ {count} service(s) interne(s) : {names}",
+    },
     "checkbox_delete_data": {"en": "Also delete the data", "fr": "Supprimer aussi les données"},
     "checkbox_delete_domain": {"en": "Also delete the domain {domain}", "fr": "Supprimer aussi le domaine {domain}"},
     "btn_delete": {"en": "Delete", "fr": "Supprimer"},
@@ -435,6 +466,14 @@ STRINGS = {
         "fr": "⚠️ Cette image est connue pour ne pas fonctionner sous un sous-chemin — le mode \"sous-domaine dédié\" a été présélectionné pour toi.",
     },
     "js_comm_error": {"en": "Communication error with the server.", "fr": "Erreur de communication avec le serveur."},
+    "js_multi_service_prompt": {
+        "en": "This docker-compose.yml declares several services — pick the one to expose via YunoHost/SSO. The others will run alongside it as internal dependencies (database, cache...), not publicly reachable.",
+        "fr": "Ce docker-compose.yml déclare plusieurs services — choisis celui à exposer via YunoHost/SSO. Les autres démarreront à ses côtés comme dépendances internes (base de données, cache...), non accessibles publiquement.",
+    },
+    "js_companions_summary": {
+        "en": "Will also start as internal dependencies (not exposed): {list}.",
+        "fr": "Démarreront aussi comme dépendances internes (non exposés) : {list}.",
+    },
     "js_path_available": {"en": "✓ {address} is available.", "fr": "✓ {address} est disponible."},
     "js_path_used": {
         "en": "✗ {address} already hosts another app{app_name} — choose another path.",
@@ -477,6 +516,9 @@ STRINGS = {
         "fr": "⚠️ Peuvent contenir de vraies données — à supprimer un par un, en connaissance de cause.",
     },
     "no_orphan_volumes": {"en": "No orphan volume found.", "fr": "Aucun volume orphelin trouvé."},
+    "h2_orphan_networks": {"en": "Orphan networks", "fr": "Réseaux orphelins"},
+    "no_orphan_networks": {"en": "No orphan network found.", "fr": "Aucun réseau orphelin trouvé."},
+    "confirm_delete_orphan_network": {"en": "Delete the orphan network {name}?", "fr": "Supprimer le réseau orphelin {name} ?"},
     "h2_dangling_images": {"en": "Unused Docker images", "fr": "Images Docker inutilisées"},
     "dangling_images_count": {"en": "{count} unused image(s)", "fr": "{count} image(s) inutilisée(s)"},
     "total_mb": {"en": "{mb} MB total", "fr": "{mb} Mo au total"},
@@ -491,8 +533,8 @@ STRINGS = {
     # belief that "everything" is cleaned up when 2 out of 4 categories are
     # never handled by this button.
     "bulk_cleanup_scope_note": {
-        "en": "Containers and images only — volumes and empty domains are always handled one at a time, below.",
-        "fr": "Conteneurs et images uniquement — les volumes et domaines vides se traitent toujours un par un, ci-dessous.",
+        "en": "Containers and images only — volumes, networks, and empty domains are always handled one at a time, below.",
+        "fr": "Conteneurs et images uniquement — les volumes, réseaux et domaines vides se traitent toujours un par un, ci-dessous.",
     },
     "no_dangling_images": {"en": "No unused image found.", "fr": "Aucune image inutilisée trouvée."},
     "h2_empty_domains": {"en": "Empty YunoHost domains", "fr": "Domaines YunoHost vides"},

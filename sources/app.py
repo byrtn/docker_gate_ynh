@@ -10,6 +10,7 @@ manifest.toml, default_language question + data/default_language.txt
 written by the install/upgrade/restore scripts).
 """
 import hmac
+import json
 import secrets
 import threading
 from pathlib import Path
@@ -41,7 +42,7 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # `version` in manifest.toml (the part before `~ynh`), not parsed
 # dynamically to avoid a manifest-parsing dependency at runtime for a
 # simple display.
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.1.0"
 
 app = Flask(__name__)
 
@@ -177,14 +178,28 @@ def add():
     env_vars_text = request.form.get("env_vars", "").strip()
     url_env_var = request.form.get("url_env_var", "").strip()
     reuse_existing_domain = request.form.get("reuse_existing_domain") == "on"
+    # Multi-container mode (semi-piloted, 2026-07-20): set by add.html's
+    # compose service picker when the pasted docker-compose.yml declares
+    # more than one service. Empty for the ordinary single-container flow.
+    companions_json = request.form.get("companions_json", "").strip()
+    main_service_key = request.form.get("main_service_key", "").strip() or None
 
     try:
         env_vars = ynh_manager.parse_env_vars_text(env_vars_text, lang) if env_vars_text else {}
-    except ynh_manager.DockerConnectorError as e:
+        companions = []
+        if companions_json:
+            for c in json.loads(companions_json):
+                companions.append({
+                    "service_key": c.get("service_key"),
+                    "image": c.get("image"),
+                    "data_path": (c.get("data_path") or "").strip() or None,
+                    "env_vars": ynh_manager.parse_env_vars_text(c["env_vars"], lang) if c.get("env_vars") else {},
+                })
+    except (ynh_manager.DockerConnectorError, ValueError) as e:
         domains = ynh_manager.existing_domains(lang)
         return render_template("add.html", domains=domains, error=str(e), form=request.form)
 
-    steps = ynh_manager.build_create_steps(mode, has_data=bool(data_path))
+    steps = ynh_manager.build_create_steps(mode, has_data=bool(data_path), has_companions=bool(companions))
     job_id = progress.create_job(steps)
 
     def run_creation():
@@ -204,6 +219,8 @@ def add():
                 env_vars=env_vars,
                 url_env_var=url_env_var,
                 reuse_existing_domain=reuse_existing_domain,
+                companions=companions,
+                main_service_key=main_service_key,
                 on_step=lambda label: progress.advance(job_id, label),
             )
             progress.finish(job_id, warnings=entry.get("warnings", []))
@@ -324,6 +341,7 @@ def audit():
 
     orphan_containers = _safe(ynh_manager.find_orphan_containers)
     orphan_volumes = _safe(ynh_manager.find_orphan_volumes)
+    orphan_networks = _safe(ynh_manager.find_orphan_networks)
     dangling_images = _safe(ynh_manager.find_dangling_images)
     empty_domains = _safe(ynh_manager.find_empty_domains, lang)
     docker_ce = _safe(ynh_manager.docker_ce_status) or {"installed": False, "tracked_containers": [], "foreign_containers": []}
@@ -331,6 +349,7 @@ def audit():
         "audit.html",
         orphan_containers=orphan_containers,
         orphan_volumes=orphan_volumes,
+        orphan_networks=orphan_networks,
         dangling_images=dangling_images,
         empty_domains=empty_domains,
         docker_ce=docker_ce,
@@ -372,6 +391,19 @@ def audit_remove_volume(name):
     try:
         ynh_manager.remove_orphan_volume(name, lang)
         flash(i18n.t("flash_orphan_volume_removed", lang, name=name), "success")
+    except ynh_manager.DockerConnectorError as e:
+        flash(str(e), "error")
+    except Exception as e:
+        flash(i18n.t("flash_unexpected_error", lang, error=e), "error")
+    return redirect(url_for("audit"))
+
+
+@app.route("/audit/remove_network/<name>", methods=["POST"])
+def audit_remove_network(name):
+    lang = get_lang()
+    try:
+        ynh_manager.remove_orphan_network(name, lang)
+        flash(i18n.t("flash_orphan_network_removed", lang, name=name), "success")
     except ynh_manager.DockerConnectorError as e:
         flash(str(e), "error")
     except Exception as e:

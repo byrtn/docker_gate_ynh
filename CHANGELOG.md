@@ -7,6 +7,34 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.1.0~ynh1] — 2026-07-20
+
+### Added
+- **Multi-container mode (semi-piloted)**: pasting a docker-compose.yml
+  that declares several services (e.g. an app + its database + a cache —
+  Immich, Paperless-ngx...) no longer silently keeps only the first
+  service. The Analyze step now lets you pick which service is exposed
+  via YunoHost/SSO; every other service starts alongside it as an internal
+  dependency, connected to a dedicated Docker network, with no published
+  port and no SSO exposure. Each container (main and companions) is given
+  a network alias equal to its own original compose service key, so env
+  vars copied verbatim from the compose file (e.g.
+  `DATABASE_URL=postgres://user:pass@db/db`) keep resolving correctly
+  with zero rewriting. Removal cleans up the companions and the network
+  the same way it already did for the main container/volume/domain.
+
+### Fixed
+- The Analyze step's `docker run`/docker-compose parser had 4 silent
+  data-loss bugs, found while stress-testing it against real Docker Hub
+  examples: a published port with a `/udp` or `/tcp` suffix (e.g.
+  `-p 80:80/udp`) was kept as-is instead of the numeric port; a repeated
+  `-p`/`-v` (or multiple `ports:`/`volumes:` entries) was silently
+  overwritten/ignored instead of warning that only the first was kept;
+  `${VAR}`/`${VAR:-default}` compose interpolation was never resolved (now
+  resolved when a default is present, warned about otherwise); an
+  `env_file:` reference was silently dropped with no indication its
+  variables weren't picked up.
+
 ## [1.0.2~ynh1] — 2026-07-18
 
 ### Added
