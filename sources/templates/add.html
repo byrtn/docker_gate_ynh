@@ -12,6 +12,10 @@
   <label for="raw_input">{{ t('raw_input_label') }}</label>
   <textarea id="raw_input" rows="5" class="text-input monospace" style="margin-top:0.5rem;" placeholder="{{ t('raw_input_placeholder') }}"></textarea>
 
+  <div style="margin-top:0.6rem; padding:0.6rem 0.8rem; background:rgba(4,18,38,0.05); border-left:3px solid var(--color-primary); border-radius:8px; font-size:0.85rem;">
+    {{ t('url_import_tip') }}
+  </div>
+
   <details style="margin-top:0.6rem;">
     <summary style="cursor:pointer; font-size:0.85rem; color:var(--color-text-dim);">{{ t('import_file_or_url') }}</summary>
     <div style="margin:0.6rem 0;">
@@ -26,9 +30,6 @@
     </div>
     <div style="margin:0.6rem 0;">
       <input type="text" id="compose_url" class="text-input" placeholder="{{ t('compose_url_placeholder') }}">
-    </div>
-    <div style="padding:0.6rem 0.8rem; background:rgba(4,18,38,0.05); border-left:3px solid var(--color-primary); border-radius:8px; font-size:0.85rem;">
-      {{ t('url_import_tip') }}
     </div>
   </details>
 
