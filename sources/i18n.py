@@ -410,6 +410,10 @@ STRINGS = {
         "en": "URL (e.g. raw GitHub link to a docker-compose.yml)",
         "fr": "URL (ex: lien GitHub brut vers un docker-compose.yml)",
     },
+    "url_import_tip": {
+        "en": "💡 Prefer a URL over pasting text when you can: Docker Gate also looks for the project's own example environment file right next to it and pre-fills required variables automatically — often no manual typing needed at all.",
+        "fr": "💡 Préfère une URL au copier-coller de texte quand c'est possible : Docker Gate cherche aussi le fichier d'exemple d'environnement du projet juste à côté et pré-remplit automatiquement les variables requises — souvent sans aucune saisie manuelle.",
+    },
     "btn_analyze": {"en": "Analyze", "fr": "Analyser"},
     "app_name_label": {"en": "App name", "fr": "Nom de l'app"},
     "app_name_placeholder": {"en": "e.g. uptime-kuma", "fr": "ex: uptime-kuma"},
