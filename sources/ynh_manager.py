@@ -255,7 +255,7 @@ def inspect_docker_image(image_name, lang):
     if exposed_ports:
         # Docker format: {"80/tcp": {}, "443/tcp": {}} — take the first one.
         first_port = next(iter(exposed_ports))
-        result["container_port"] = first_port.split("/")[0]
+        result["container_port"] = _strip_port_protocol(first_port)
 
     volumes = config.get("Volumes") or {}
     if volumes:
@@ -263,6 +263,43 @@ def inspect_docker_image(image_name, lang):
         result["data_path"] = next(iter(volumes))
 
     return result
+
+
+def _strip_port_protocol(port_str):
+    """'80/udp' -> '80'. Docker accepts a '/udp' or '/tcp' suffix on
+    published ports (both in `docker run -p` and in a compose `ports:`
+    entry) — without stripping it, the port ends up stored as a
+    non-numeric string and breaks downstream validation (err_port_not_a_number)."""
+    return port_str.split("/")[0]
+
+
+_COMPOSE_VAR_PATTERN = re.compile(
+    r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-?])?([^}]*)\}"
+)
+
+
+def _substitute_compose_vars(text):
+    """Best-effort resolution of docker-compose '${VAR}' interpolation
+    (e.g. `image: vaultwarden/server:${TAG:-latest}`), which is extremely
+    common in compose files pulled straight from a project's README.
+
+    We have no access to the user's real environment/.env, so only the
+    forms that carry an explicit default (${VAR:-default} / ${VAR-default})
+    can be resolved — the default is substituted in. Anything else
+    (${VAR}, ${VAR:?msg}, ${VAR?msg}) is left untouched (rule #1: never
+    invent a value) and its name is reported back so the caller can warn
+    the user instead of silently shipping a broken '${VAR}' string."""
+    unresolved = []
+
+    def _replace(match):
+        name, operator, rest = match.group(1), match.group(2), match.group(3)
+        if operator in (":-", "-"):
+            return rest
+        unresolved.append(name)
+        return match.group(0)
+
+    resolved_text = _COMPOSE_VAR_PATTERN.sub(_replace, text)
+    return resolved_text, unresolved
 
 
 def parse_docker_run_command(text, lang):
@@ -290,6 +327,7 @@ def parse_docker_run_command(text, lang):
     tokens = tokens[tokens.index("run") + 1:]
 
     result = {"image": None, "container_port": None, "data_path": None, "env_vars": None, "url_env_var": None, "suggested_slug": None}
+    warnings = []
     env_pairs = []
     i = 0
     image = None
@@ -300,19 +338,28 @@ def parse_docker_run_command(text, lang):
             i += 2
             continue
         if tok in ("-p", "--publish") and i + 1 < len(tokens):
-            result["container_port"] = tokens[i + 1].split(":")[-1]
+            # Multiple -p flags are common (e.g. an HTTP port + a metrics
+            # port) but this form only carries one — the first one found
+            # is kept (predictable), the rest are reported so nothing is
+            # silently dropped without the user knowing.
+            if result["container_port"] is None:
+                result["container_port"] = _strip_port_protocol(tokens[i + 1].split(":")[-1])
+            else:
+                warnings.append(t("err_docker_run_duplicate_port", lang))
             i += 2
             continue
         if tok in ("-v", "--volume") and i + 1 < len(tokens):
             parts = tokens[i + 1].split(":")
-            if len(parts) >= 2 and not parts[0].startswith("/"):
-                # Named volume (rare on the command line, but possible).
-                result["data_path"] = parts[1]
-            elif len(parts) >= 2:
-                # Host path mount (the most common CLI case, e.g.
-                # -v /vw-data/:/data/) — we still want the path INSIDE the
-                # container, i.e. the part after the ':'.
-                result["data_path"] = parts[1]
+            if len(parts) >= 2:
+                # Either a named volume (source has no leading '/') or a
+                # host path mount (e.g. -v /vw-data/:/data/) — either way
+                # we want the path INSIDE the container, i.e. the part
+                # after the ':'. Same "first wins, rest reported" rule as
+                # for -p above.
+                if result["data_path"] is None:
+                    result["data_path"] = parts[1]
+                else:
+                    warnings.append(t("err_docker_run_duplicate_volume", lang))
             i += 2
             continue
         if tok in ("-e", "--env") and i + 1 < len(tokens):
@@ -349,6 +396,7 @@ def parse_docker_run_command(text, lang):
     if not result["image"]:
         raise DockerConnectorError(t("err_no_image_in_command", lang))
 
+    result["warnings"] = warnings
     return result
 
 
@@ -382,6 +430,7 @@ def smart_parse_input(text, lang):
 
     if _looks_like_spa(result.get("image")):
         result["suggested_mode"] = "subdomain"
+    result.setdefault("warnings", [])
     return result
 
 
@@ -395,6 +444,8 @@ def parse_compose_snippet(text, lang):
     of a single service's block. Only fills in what it finds — it's up to
     the user to complete the rest if needed, no invented defaults out of
     thin air (rule #1: never state something that hasn't been verified)."""
+    text, unresolved_vars = _substitute_compose_vars(text)
+
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as e:
@@ -419,6 +470,13 @@ def parse_compose_snippet(text, lang):
 
     result = {"image": None, "container_port": None, "data_path": None, "env_vars": None, "url_env_var": None,
               "suggested_slug": service.get("container_name") or service_key}
+    warnings = []
+
+    if unresolved_vars:
+        warnings.append(t("err_compose_unresolved_vars", lang, vars=", ".join(sorted(set(unresolved_vars)))))
+
+    if service.get("env_file"):
+        warnings.append(t("err_compose_env_file_not_supported", lang))
 
     if "image" in service:
         result["image"] = str(service["image"])
@@ -426,11 +484,15 @@ def parse_compose_snippet(text, lang):
     ports = service.get("ports")
     if ports and isinstance(ports, list) and ports:
         first = str(ports[0])
-        # Possible formats: "3001", "3001:3001", "127.0.0.1:3001:3001"
-        result["container_port"] = first.split(":")[-1]
+        # Possible formats: "3001", "3001:3001", "127.0.0.1:3001:3001",
+        # any of which may also carry a "/udp" or "/tcp" protocol suffix.
+        result["container_port"] = _strip_port_protocol(first.split(":")[-1])
+        if len(ports) > 1:
+            warnings.append(t("err_compose_multiple_ports", lang))
 
     volumes = service.get("volumes")
     if volumes and isinstance(volumes, list):
+        candidates_found = 0
         for v in volumes:
             v_str = str(v)
             parts = v_str.split(":")
@@ -444,8 +506,11 @@ def parse_compose_snippet(text, lang):
             # socket, not its data).
             if source.startswith("/"):
                 continue
-            result["data_path"] = parts[1]
-            break
+            candidates_found += 1
+            if result["data_path"] is None:
+                result["data_path"] = parts[1]
+        if candidates_found > 1:
+            warnings.append(t("err_compose_multiple_volumes", lang))
 
     environment = service.get("environment")
     if environment:
@@ -477,6 +542,7 @@ def parse_compose_snippet(text, lang):
     if not result["image"] and not result["container_port"] and not result["data_path"] and not result["env_vars"]:
         raise DockerConnectorError(t("err_nothing_extracted", lang))
 
+    result["warnings"] = warnings
     return result
 
 

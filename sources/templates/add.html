@@ -348,6 +348,10 @@ function analyze() {
 
       resultEl.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
       resultEl.style.color = filled.length ? '#1A7D43' : '#6B7280';
+
+      if (data.warnings && data.warnings.length) {
+        resultEl.innerHTML += data.warnings.map(w => '<div style="color:#B45309">⚠ ' + w + '</div>').join('');
+      }
     })
     .catch(() => {
       resultEl.textContent = MSG.commError;
