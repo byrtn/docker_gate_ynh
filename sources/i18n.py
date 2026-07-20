@@ -26,10 +26,8 @@ STRINGS = {
     "step_web_diag": {"en": "Web diagnosis", "fr": "Diagnostic Web"},
     "step_get_cert": {"en": "Obtaining the Let's Encrypt certificate", "fr": "Obtention du certificat Let's Encrypt"},
     "step_check_cert": {"en": "Checking the obtained certificate", "fr": "Vérification du certificat obtenu"},
-    "step_create_volume": {"en": "Creating the data volume", "fr": "Création du volume de données"},
-    "step_create_network": {"en": "Creating the app's dedicated network", "fr": "Création du réseau dédié de l'app"},
-    "step_run_companions": {"en": "Starting internal dependencies (database, cache...)", "fr": "Démarrage des dépendances internes (base de données, cache...)"},
-    "step_run_container": {"en": "Starting the Docker container", "fr": "Lancement du conteneur Docker"},
+    "step_write_compose": {"en": "Preparing the container configuration", "fr": "Préparation de la configuration des conteneurs"},
+    "step_compose_up": {"en": "Starting the Docker container(s)", "fr": "Démarrage du/des conteneur(s) Docker"},
     "step_expose_app": {"en": "Exposing via YunoHost (nginx + SSO)", "fr": "Exposition via YunoHost (nginx + SSO)"},
 
     # --- Errors / warnings (ynh_manager.py) ---
@@ -217,21 +215,21 @@ STRINGS = {
         "en": "→ If everything above was already fine, a simple retry is usually enough (YunoHost sometimes blocks the very first attempt on a freshly created domain).",
         "fr": "→ Si tout ce qui précède était déjà bon, un simple nouvel essai suffit généralement (YunoHost bloque parfois le tout premier essai sur un domaine tout juste créé).",
     },
-    "err_create_volume": {
-        "en": "Unable to create the data volume: {error}",
-        "fr": "Impossible de créer le volume de données : {error}",
+    "err_write_compose": {
+        "en": "Unable to write the container configuration to disk: {error}",
+        "fr": "Impossible d'écrire la configuration des conteneurs sur le disque : {error}",
     },
-    "err_run_container": {
-        "en": "Docker was unable to start the container: {error}",
-        "fr": "Docker n'a pas pu lancer le conteneur : {error}",
+    "err_compose_config_invalid": {
+        "en": "The generated container configuration is invalid — this is a Docker Gate bug, please report it.",
+        "fr": "La configuration des conteneurs générée est invalide — c'est un bug de Docker Gate, merci de le signaler.",
     },
-    "err_create_network": {
-        "en": "Unable to create the app's dedicated Docker network: {error}",
-        "fr": "Impossible de créer le réseau Docker dédié de l'app : {error}",
+    "err_compose_up_failed": {
+        "en": "Docker was unable to start the container(s).",
+        "fr": "Docker n'a pas pu démarrer le(s) conteneur(s).",
     },
-    "err_run_companion_container": {
-        "en": "Unable to start the internal dependency '{service}': {error}",
-        "fr": "Impossible de démarrer la dépendance interne '{service}' : {error}",
+    "err_compose_down_failed": {
+        "en": "Unable to stop/remove the container(s).",
+        "fr": "Impossible d'arrêter/supprimer le(s) conteneur(s).",
     },
     "err_expose_app": {
         "en": "Exposing via the YunoHost 'redirect' app failed. The Docker container was started but isn't exposed yet.",
