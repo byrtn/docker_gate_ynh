@@ -13,7 +13,7 @@ N.B. (deviation volontaire, 18/07/2026) : la section "branche testing" du gabari
 
 Install Docker and expose containers behind YunoHost's SSO with one click
 
-[![Version: 1.0.2~ynh1](https://img.shields.io/badge/Version-1.0.2~ynh1-rgb(18,138,11)?style=for-the-badge)](https://ci-apps.yunohost.org/ci/apps/docker_gate/)
+[![Version: 1.1.0~ynh1](https://img.shields.io/badge/Version-1.1.0~ynh1-rgb(18,138,11)?style=for-the-badge)](https://ci-apps.yunohost.org/ci/apps/docker_gate/)
 
 <div align="center">
 <a href="https://apps.yunohost.org/app/docker_gate"><img height="100px" src="https://github.com/YunoHost/yunohost-artwork/raw/refs/heads/main/badges/neopossum-badges/badge_more_info_on_the_appstore.svg"/></a>

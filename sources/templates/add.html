@@ -37,6 +37,9 @@
 
 <form method="post" action="{{ url_for('add') }}" id="main-form" onsubmit="return beforeSubmit();">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="companions_json" id="companions_json" value="">
+  <input type="hidden" name="main_service_key" id="main_service_key" value="">
+  <div id="companions-summary"></div>
 
   <div class="field">
     <label for="slug">{{ t('app_name_label') }}</label>
@@ -167,7 +170,10 @@ const MSG = {
   alertSubdomainBlocked: {{ t('js_alert_subdomain_blocked')|tojson }},
   alertPathBlocked: {{ t('js_alert_path_blocked')|tojson }},
   spaModeSuggested: {{ t('js_spa_mode_suggested')|tojson }},
+  multiServicePrompt: {{ t('js_multi_service_prompt')|tojson }},
 };
+
+let composeServices = [];
 
 function toggleMode(mode) {
   document.getElementById('mode').value = mode;
@@ -297,10 +303,79 @@ function loadComposeFile(event) {
   reader.readAsText(file);
 }
 
+function applyServiceToForm(svc) {
+  let filled = [];
+  if (svc.image) { document.getElementById('image').value = svc.image; filled.push('image'); }
+  if (svc.container_port) { document.getElementById('container_port').value = svc.container_port; filled.push('port'); }
+  document.getElementById('data_path').value = svc.data_path || '';
+  if (svc.data_path) filled.push('data');
+  document.getElementById('url_env_var').value = svc.url_env_var || '';
+  if (svc.url_env_var) filled.push('url_env_var');
+  document.getElementById('env_vars').value = svc.env_vars || '';
+  if (svc.env_vars) filled.push('env_vars');
+
+  if (svc.image && !document.getElementById('slug').value.trim()) {
+    const slug = svc.suggested_slug ? svc.suggested_slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') : suggestSlug(svc.image);
+    document.getElementById('slug').value = slug;
+    onSlugInput();
+  }
+
+  if (svc.suggested_mode === 'subdomain') {
+    const subdomainRadio = document.querySelector('input[name="mode_simple"][value="subdomain"]');
+    subdomainRadio.checked = true;
+    toggleMode('subdomain');
+  }
+
+  return filled;
+}
+
+function selectMainService(idx, topLevelWarnings) {
+  const chosen = composeServices[idx];
+  const companions = composeServices.filter((s, i) => i !== idx).map(s => ({
+    service_key: s.service_key, image: s.image, container_port: s.container_port,
+    data_path: s.data_path, env_vars: s.env_vars,
+  }));
+  document.getElementById('companions_json').value = JSON.stringify(companions);
+  document.getElementById('main_service_key').value = chosen.service_key || '';
+
+  const filled = applyServiceToForm(chosen);
+  const resultEl = document.getElementById('analyze-result');
+  let messages = [filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted];
+  if (chosen.suggested_mode === 'subdomain') messages.push(MSG.spaModeSuggested);
+  const allWarnings = topLevelWarnings.concat(chosen.warnings || []);
+
+  resultEl.innerHTML = renderComposePicker(idx) + messages.map(m => '<div>' + m + '</div>').join('')
+    + allWarnings.map(w => '<div style="color:#B45309">⚠ ' + w + '</div>').join('');
+
+  const others = composeServices.filter((s, i) => i !== idx).map(s => s.service_key || s.image).join(', ');
+  document.getElementById('companions-summary').innerHTML = companions.length
+    ? '<div style="margin-bottom:1rem; padding:0.6rem 0.8rem; background:rgba(4,18,38,0.05); border-left:3px solid var(--color-primary); border-radius:8px; font-size:0.85rem;">' + MSG.companionsSummary(others) + '</div>'
+    : '';
+}
+
+function renderComposePicker(selectedIdx) {
+  let html = '<div style="font-weight:600; margin-bottom:0.4rem;">' + MSG.multiServicePrompt + '</div>';
+  composeServices.forEach((s, i) => {
+    const checked = i === selectedIdx ? 'checked' : '';
+    html += '<label style="font-weight:normal; display:block; margin:0.3rem 0;">'
+      + '<input type="radio" name="compose_service_picker" value="' + i + '" ' + checked + ' onchange="selectMainService(' + i + ', composeTopLevelWarnings)"> '
+      + '<strong>' + (s.service_key || s.image) + '</strong> — ' + s.image
+      + '</label>';
+  });
+  return html;
+}
+
+let composeTopLevelWarnings = [];
+
 function analyze() {
   const url = document.getElementById('compose_url').value.trim();
   const text = document.getElementById('raw_input').value;
   const resultEl = document.getElementById('analyze-result');
+
+  document.getElementById('companions_json').value = '';
+  document.getElementById('main_service_key').value = '';
+  document.getElementById('companions-summary').innerHTML = '';
+  composeServices = [];
 
   const payload = url ? {url: url} : {text: text};
   if (!url && !text.trim()) {
@@ -325,26 +400,18 @@ function analyze() {
       if (data.raw_text) {
         document.getElementById('raw_input').value = data.raw_text;
       }
-      let filled = [];
-      if (data.image) { document.getElementById('image').value = data.image; filled.push('image'); }
-      if (data.container_port) { document.getElementById('container_port').value = data.container_port; filled.push('port'); }
-      if (data.data_path) { document.getElementById('data_path').value = data.data_path; filled.push('data'); }
-      if (data.url_env_var) { document.getElementById('url_env_var').value = data.url_env_var; filled.push('url_env_var'); }
-      if (data.env_vars) { document.getElementById('env_vars').value = data.env_vars; filled.push('env_vars'); }
 
-      if (data.image && !document.getElementById('slug').value.trim()) {
-        const slug = data.suggested_slug ? data.suggested_slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') : suggestSlug(data.image);
-        document.getElementById('slug').value = slug;
-        onSlugInput();
+      if (data.multi_service) {
+        composeServices = data.services;
+        composeTopLevelWarnings = data.warnings || [];
+        resultEl.style.color = '#1A7D43';
+        selectMainService(0, composeTopLevelWarnings);
+        return;
       }
 
+      let filled = applyServiceToForm(data);
       let messages = [filled.length ? MSG.reviewPrefilled : MSG.nothingExtracted];
-      if (data.suggested_mode === 'subdomain') {
-        const subdomainRadio = document.querySelector('input[name="mode_simple"][value="subdomain"]');
-        subdomainRadio.checked = true;
-        toggleMode('subdomain');
-        messages.push(MSG.spaModeSuggested);
-      }
+      if (data.suggested_mode === 'subdomain') messages.push(MSG.spaModeSuggested);
 
       resultEl.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
       resultEl.style.color = filled.length ? '#1A7D43' : '#6B7280';
@@ -378,6 +445,9 @@ MSG.subdomainExistsEmpty = function(domain) {
 MSG.reuseSubdomain = {{ t('js_reuse_subdomain')|tojson }};
 MSG.subdomainUsed = function(domain, suggestion) {
   return {{ t('js_subdomain_used', domain='__DOMAIN__', suggestion='__SUGGESTION__')|tojson }}.replace('__DOMAIN__', domain).replace('__SUGGESTION__', suggestion);
+};
+MSG.companionsSummary = function(list) {
+  return {{ t('js_companions_summary', list='__LIST__')|tojson }}.replace('__LIST__', list);
 };
 </script>
 

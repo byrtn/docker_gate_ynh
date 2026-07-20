@@ -428,52 +428,43 @@ def smart_parse_input(text, lang):
     else:
         raise DockerConnectorError(t("err_unrecognized_format", lang))
 
-    if _looks_like_spa(result.get("image")):
+    if result.get("multi_service"):
+        for service_result in result["services"]:
+            if _looks_like_spa(service_result.get("image")):
+                service_result["suggested_mode"] = "subdomain"
+    elif _looks_like_spa(result.get("image")):
         result["suggested_mode"] = "subdomain"
     result.setdefault("warnings", [])
     return result
 
 
-def parse_compose_snippet(text, lang):
-    """Extracts image/port/data from a docker-compose.yml snippet pasted by
-    the user — many self-hosted projects publish a ready-made one (unlike
-    the rest of their docs, often free-text, this format is structured and
-    reliable to parse automatically).
-
-    Accepts both a full file (with a `services:` key) and a plain snippet
-    of a single service's block. Only fills in what it finds — it's up to
-    the user to complete the rest if needed, no invented defaults out of
-    thin air (rule #1: never state something that hasn't been verified)."""
-    text, unresolved_vars = _substitute_compose_vars(text)
-
+def _is_internal_service_reference(url_value, sibling_service_keys):
+    """True if a 'http://...' env value's host is actually another
+    service's compose key (e.g. IMMICH_MACHINE_LEARNING_URL=http://immich-
+    machine-learning:3003 in a multi-service compose) rather than the
+    app's own public base URL. Found while testing the Immich compose for
+    the multi-container mode (2026-07-20): without this check, such a
+    value would be mistaken for the app's own base URL and silently
+    overwritten by create_docker_app's auto-computed domain/path — quietly
+    breaking the app's connection to its companion."""
+    if not sibling_service_keys:
+        return False
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
-        raise DockerConnectorError(t("err_invalid_compose", lang, error=e))
+        host = url_value.split("://", 1)[1].split("/")[0].split(":")[0]
+    except IndexError:
+        return False
+    return host in sibling_service_keys
 
-    if not isinstance(data, dict):
-        raise DockerConnectorError(t("err_invalid_compose_notdict", lang))
 
-    if "services" in data and isinstance(data["services"], dict):
-        services = data["services"]
-        if not services:
-            raise DockerConnectorError(t("err_no_service_found", lang))
-        service_key, service = next(iter(services.items()))
-    else:
-        # Might be a plain snippet (just a service's block, without the
-        # enclosing "services:" key).
-        service = data
-        service_key = None
-
-    if not isinstance(service, dict):
-        raise DockerConnectorError(t("err_unrecognized_service_format", lang))
-
+def _extract_compose_service_fields(service, service_key, lang, sibling_service_keys=None):
+    """Extracts image/port/data/env from a single compose service block —
+    the exact same extraction rules regardless of whether the compose file
+    declares one service or several (see parse_compose_snippet). Returns
+    (result_dict, warnings_list)."""
     result = {"image": None, "container_port": None, "data_path": None, "env_vars": None, "url_env_var": None,
+              "service_key": service_key,
               "suggested_slug": service.get("container_name") or service_key}
     warnings = []
-
-    if unresolved_vars:
-        warnings.append(t("err_compose_unresolved_vars", lang, vars=", ".join(sorted(set(unresolved_vars)))))
 
     if service.get("env_file"):
         warnings.append(t("err_compose_env_file_not_supported", lang))
@@ -532,17 +523,83 @@ def parse_compose_snippet(text, lang):
         # entering it twice by hand).
         other_lines = []
         for key, value in pairs:
-            if not result["url_env_var"] and re.match(r"^https?://", value):
+            if (not result["url_env_var"] and re.match(r"^https?://", value)
+                    and not _is_internal_service_reference(value, sibling_service_keys)):
                 result["url_env_var"] = key
             else:
                 other_lines.append(f"{key}={value}")
         if other_lines:
             result["env_vars"] = "\n".join(other_lines)
 
+    return result, warnings
+
+
+def parse_compose_snippet(text, lang):
+    """Extracts image/port/data from a docker-compose.yml snippet pasted by
+    the user — many self-hosted projects publish a ready-made one (unlike
+    the rest of their docs, often free-text, this format is structured and
+    reliable to parse automatically).
+
+    Accepts both a full file (with a `services:` key) and a plain snippet
+    of a single service's block. Only fills in what it finds — it's up to
+    the user to complete the rest if needed, no invented defaults out of
+    thin air (rule #1: never state something that hasn't been verified).
+
+    When the compose declares MORE THAN ONE service (e.g. an app + its
+    database + a cache), every service is extracted and returned as a list
+    under "multi_service"/"services" instead of picking just the first one
+    silently — the caller (smart_parse_input -> the add.html UI) is
+    responsible for letting the user choose which single service is
+    exposed via YunoHost/SSO, the others becoming internal companions (see
+    create_docker_app's `companions` parameter, semi-piloted multi-container
+    mode decided with Patrick on 2026-07-20)."""
+    text, unresolved_vars = _substitute_compose_vars(text)
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise DockerConnectorError(t("err_invalid_compose", lang, error=e))
+
+    if not isinstance(data, dict):
+        raise DockerConnectorError(t("err_invalid_compose_notdict", lang))
+
+    if "services" in data and isinstance(data["services"], dict):
+        services = data["services"]
+        if not services:
+            raise DockerConnectorError(t("err_no_service_found", lang))
+    else:
+        # Might be a plain snippet (just a service's block, without the
+        # enclosing "services:" key) — necessarily a single service.
+        services = {None: data}
+
+    compose_warnings = []
+    if unresolved_vars:
+        compose_warnings.append(t("err_compose_unresolved_vars", lang, vars=", ".join(sorted(set(unresolved_vars)))))
+
+    if len(services) > 1:
+        all_service_keys = set(services.keys())
+        parsed_services = []
+        for service_key, service in services.items():
+            if not isinstance(service, dict):
+                raise DockerConnectorError(t("err_unrecognized_service_format", lang))
+            sibling_keys = all_service_keys - {service_key}
+            service_result, service_warnings = _extract_compose_service_fields(service, service_key, lang, sibling_keys)
+            service_result["warnings"] = service_warnings
+            parsed_services.append(service_result)
+        if not any(s["image"] for s in parsed_services):
+            raise DockerConnectorError(t("err_nothing_extracted", lang))
+        return {"multi_service": True, "services": parsed_services, "warnings": compose_warnings}
+
+    service_key, service = next(iter(services.items()))
+    if not isinstance(service, dict):
+        raise DockerConnectorError(t("err_unrecognized_service_format", lang))
+
+    result, service_warnings = _extract_compose_service_fields(service, service_key, lang)
+
     if not result["image"] and not result["container_port"] and not result["data_path"] and not result["env_vars"]:
         raise DockerConnectorError(t("err_nothing_extracted", lang))
 
-    result["warnings"] = warnings
+    result["warnings"] = compose_warnings + service_warnings
     return result
 
 
@@ -564,12 +621,14 @@ def parse_env_vars_text(text, lang):
     return env
 
 
-def build_create_steps(mode, has_data):
+def build_create_steps(mode, has_data, has_companions=False):
     """Builds the ordered list of planned step KEYS for a creation,
-    depending on the mode and whether persistent data was requested. Used
-    both to prepare the progress display AND by create_docker_app to
-    report its real progress — the two can therefore never fall out of
-    sync.
+    depending on the mode, whether persistent data was requested, and
+    whether this is a multi-container creation (has_companions, semi-
+    piloted mode decided 2026-07-20 — see create_docker_app's `companions`
+    parameter). Used both to prepare the progress display AND by
+    create_docker_app to report its real progress — the two can therefore
+    never fall out of sync.
 
     Returns stable keys (i18n.STRINGS), never directly displayable text —
     translation happens at display time (progress.html), never here (these
@@ -586,6 +645,8 @@ def build_create_steps(mode, has_data):
         ]
     if has_data:
         steps.append("step_create_volume")
+    if has_companions:
+        steps += ["step_create_network", "step_run_companions"]
     steps += ["step_run_container", "step_expose_app"]
     return steps
 
@@ -659,7 +720,101 @@ def check_path_status(domain, path, lang):
     return {"status": "free", "domain": domain, "path": normalized_path}
 
 
-def create_docker_app(slug, image, container_port, mode, domain, domain_parent, path, new_subdomain, visibility, lang, data_path="", env_vars=None, url_env_var="", reuse_existing_domain=False, on_step=None):
+def _start_companion_containers(slug, network, companions, lang):
+    """Creates and starts every companion container (database, cache...)
+    of a multi-container app, connected to the given network under an
+    alias equal to their own compose service_key (see create_docker_app's
+    docstring). Returns the list of companion entries actually created —
+    used both for the state file and, on a later failure, to know exactly
+    what to tear down. Raises DockerConnectorError on the first failure;
+    the caller is responsible for rolling back what this function already
+    created (it does NOT clean up after itself, consistent with the
+    existing rollback style in create_docker_app, all handled by the
+    caller in one place)."""
+    created = []
+    try:
+        for companion in companions:
+            service_key = companion["service_key"]
+            container_name = f"docker-gate-{slug}-{service_key}"
+            volume_name = None
+            if companion.get("data_path"):
+                volume_name = f"docker-gate-{slug}-{service_key}-data"
+                try:
+                    docker_client.volumes.create(name=volume_name)
+                except docker.errors.APIError as e:
+                    raise DockerConnectorError(t("err_run_companion_container", lang, service=service_key, error=e)) from e
+
+            create_kwargs = dict(name=container_name, detach=True, restart_policy={"Name": "always"})
+            if companion.get("env_vars"):
+                create_kwargs["environment"] = companion["env_vars"]
+            if volume_name:
+                create_kwargs["volumes"] = {volume_name: {"bind": companion["data_path"], "mode": "rw"}}
+
+            try:
+                container = docker_client.containers.create(companion["image"], **create_kwargs)
+                network.connect(container, aliases=[service_key] if service_key else None)
+                container.start()
+            except docker.errors.APIError as e:
+                if volume_name:
+                    try:
+                        docker_client.volumes.get(volume_name).remove()
+                    except docker.errors.NotFound:
+                        pass
+                raise DockerConnectorError(t("err_run_companion_container", lang, service=service_key, error=e)) from e
+
+            created.append({
+                "service_key": service_key,
+                "container_name": container_name,
+                "image": companion["image"],
+                "volume_name": volume_name,
+                "data_path": companion.get("data_path"),
+                "env_var_keys": sorted(companion["env_vars"].keys()) if companion.get("env_vars") else [],
+            })
+    except DockerConnectorError:
+        # A later companion failed — tear down every companion already
+        # started before this one, so the caller only has to worry about
+        # the network and the main app's own volume (see create_docker_app).
+        _teardown_companions(created)
+        raise
+    return created
+
+
+def _teardown_companions(companion_entries):
+    """Best-effort removal of already-created companion containers/volumes
+    — used on rollback when a later step of create_docker_app fails.
+    Errors are swallowed here on purpose: this runs while another
+    DockerConnectorError is already about to be raised/re-raised, and the
+    Audit page can find and report any residue this leaves behind."""
+    for c in companion_entries:
+        try:
+            container = docker_client.containers.get(c["container_name"])
+            container.stop()
+            container.remove()
+        except docker.errors.NotFound:
+            pass
+        except docker.errors.APIError:
+            pass
+        if c.get("volume_name"):
+            try:
+                docker_client.volumes.get(c["volume_name"]).remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError:
+                pass
+
+
+def _teardown_network(network_name):
+    """Best-effort removal of a just-created Docker network on rollback —
+    same swallow-errors philosophy as _teardown_companions."""
+    try:
+        docker_client.networks.get(network_name).remove()
+    except docker.errors.NotFound:
+        pass
+    except docker.errors.APIError:
+        pass
+
+
+def create_docker_app(slug, image, container_port, mode, domain, domain_parent, path, new_subdomain, visibility, lang, data_path="", env_vars=None, url_env_var="", reuse_existing_domain=False, companions=None, main_service_key=None, on_step=None):
     """Main entry point for creating an exposed Docker app.
 
     mode: "path" or "subdomain"
@@ -705,6 +860,19 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     if the certificate fails on a first attempt, the domain stays created;
     relaunching the install with this parameter just picks up right after,
     without starting over.
+
+    companions (optional, semi-piloted multi-container mode decided with
+    Patrick on 2026-07-20): list of dicts {service_key, image, data_path,
+    env_vars} for the OTHER services of a multi-service docker-compose.yml
+    (e.g. a database, a cache) that must run alongside the main container
+    on a dedicated Docker network, without any YunoHost/SSO exposure or
+    published port. main_service_key is the original compose key of the
+    exposed service itself. Every container (main + companions) is
+    connected to that network with a Docker network ALIAS equal to its own
+    original compose service_key — this is what lets env vars extracted
+    verbatim from the compose (e.g. DATABASE_URL=postgres://user:pass@db/db)
+    keep resolving correctly with zero rewriting, since "db" was also the
+    compose key of the companion now aliased "db" on the network.
 
     Raises DockerConnectorError with a clear message at every step that can
     genuinely fail in a blocking way (invalid parameters, unavailable port,
@@ -862,6 +1030,37 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         except docker.errors.APIError as e:
             raise DockerConnectorError(t("err_create_volume", lang, error=e))
 
+    # --- Dedicated network + companion containers (semi-piloted
+    # multi-container mode, decided with Patrick on 2026-07-20 — see this
+    # function's docstring) ---
+    network = None
+    network_name = None
+    companion_entries = []
+    if companions:
+        step("step_create_network")
+        network_name = f"docker-gate-{slug}-net"
+        try:
+            network = docker_client.networks.create(network_name, driver="bridge")
+        except docker.errors.APIError as e:
+            if volume_name:
+                try:
+                    docker_client.volumes.get(volume_name).remove()
+                except docker.errors.NotFound:
+                    pass
+            raise DockerConnectorError(t("err_create_network", lang, error=e))
+
+        step("step_run_companions")
+        try:
+            companion_entries = _start_companion_containers(slug, network, companions, lang)
+        except DockerConnectorError:
+            _teardown_network(network_name)
+            if volume_name:
+                try:
+                    docker_client.volumes.get(volume_name).remove()
+                except docker.errors.NotFound:
+                    pass
+            raise
+
     # --- Starting the Docker container ---
     step("step_run_container")
     container_name = f"docker-gate-{slug}"
@@ -877,7 +1076,16 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         run_kwargs["volumes"] = {volume_name: {"bind": data_path, "mode": "rw"}}
 
     try:
-        docker_client.containers.run(image, **run_kwargs)
+        if network:
+            # Created (not run()) so it can be explicitly connected to the
+            # dedicated network with an alias BEFORE starting — docker-py's
+            # containers.run() doesn't expose network aliases, only a bare
+            # network name (see _start_companion_containers, same reasoning).
+            container = docker_client.containers.create(image, **run_kwargs)
+            network.connect(container, aliases=[main_service_key] if main_service_key else None)
+            container.start()
+        else:
+            docker_client.containers.run(image, **run_kwargs)
     except docker.errors.APIError as e:
         # Audit workstream 5 (2026-07-17): the volume may have just been
         # created above (data_path provided) — before this fix, a failure
@@ -890,6 +1098,10 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
                 docker_client.volumes.get(volume_name).remove()
             except docker.errors.NotFound:
                 pass
+        if companion_entries:
+            _teardown_companions(companion_entries)
+        if network_name:
+            _teardown_network(network_name)
         raise DockerConnectorError(t("err_run_container", lang, error=e))
 
     # --- Exposure via the official "redirect" app ---
@@ -931,6 +1143,10 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
                 docker_client.volumes.get(volume_name).remove()
             except docker.errors.NotFound:
                 pass
+        if companion_entries:
+            _teardown_companions(companion_entries)
+        if network_name:
+            _teardown_network(network_name)
         raise
 
     apps_after = {a["id"] for a in json.loads(
@@ -976,6 +1192,8 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         "volume_name": volume_name,
         "data_path": data_path or None,
         "env_var_keys": sorted(env_vars.keys()) if env_vars else [],
+        "network_name": network_name,
+        "companions": companion_entries,
     }
     apps = _load_state()
     apps.append(entry)
@@ -1047,6 +1265,35 @@ def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
         except docker.errors.APIError as e:
             warnings.append(t("err_remove_volume", lang, name=entry["volume_name"], error=e))
 
+    # Companion containers/volumes (semi-piloted multi-container mode,
+    # 2026-07-20) — same best-effort philosophy, and same "never delete
+    # data unless explicitly asked" rule as the main app's own volume above.
+    for companion in entry.get("companions", []):
+        try:
+            container = docker_client.containers.get(companion["container_name"])
+            container.stop()
+            container.remove()
+        except docker.errors.NotFound:
+            pass
+        except docker.errors.APIError as e:
+            warnings.append(t("err_remove_companion_container", lang, name=companion["container_name"], error=e))
+
+        if delete_data and companion.get("volume_name"):
+            try:
+                docker_client.volumes.get(companion["volume_name"]).remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError as e:
+                warnings.append(t("err_remove_companion_volume", lang, name=companion["volume_name"], error=e))
+
+    if entry.get("network_name"):
+        try:
+            docker_client.networks.get(entry["network_name"]).remove()
+        except docker.errors.NotFound:
+            pass
+        except docker.errors.APIError as e:
+            warnings.append(t("err_remove_network", lang, name=entry["network_name"], error=e))
+
     if delete_domain and entry.get("mode") == "subdomain":
         try:
             _run_sudo(
@@ -1079,10 +1326,36 @@ def remove_docker_app(slug, lang, delete_data=False, delete_domain=False):
 # removed automatically (only reported — a domain might be useful in a way
 # this app has no knowledge of).
 
+def _known_container_names():
+    """Every Docker container name Docker Gate currently tracks — the main
+    container of each app plus its companions, if any (semi-piloted
+    multi-container mode, 2026-07-20) — used to tell a real orphan apart
+    from a container that's simply part of a multi-container app."""
+    apps = _load_state()
+    names = {a["container_name"] for a in apps}
+    names |= {c["container_name"] for a in apps for c in a.get("companions", [])}
+    return names
+
+
+def _known_volume_names():
+    """Same idea as _known_container_names, for volumes (main app +
+    companions)."""
+    apps = _load_state()
+    names = {a["volume_name"] for a in apps if a.get("volume_name")}
+    names |= {c["volume_name"] for a in apps for c in a.get("companions", []) if c.get("volume_name")}
+    return names
+
+
+def _known_network_names():
+    """Every Docker network name Docker Gate currently tracks (one per
+    multi-container app, see create_docker_app)."""
+    return {a["network_name"] for a in _load_state() if a.get("network_name")}
+
+
 def find_orphan_containers():
     """Docker containers named 'docker-gate-*' but absent from our state
     file — leftovers from an interrupted creation/removal."""
-    known_names = {a["container_name"] for a in _load_state()}
+    known_names = _known_container_names()
     orphans = []
     for c in docker_client.containers.list(all=True):
         if c.name.startswith("docker-gate-") and c.name not in known_names:
@@ -1094,11 +1367,23 @@ def find_orphan_volumes():
     """Docker volumes named 'docker-gate-*-data' but absent from our state
     file — never bulk-deleted, one at a time and with explicit confirmation
     (may contain real data)."""
-    known_volumes = {a["volume_name"] for a in _load_state() if a.get("volume_name")}
+    known_volumes = _known_volume_names()
     orphans = []
     for v in docker_client.volumes.list():
         if v.name.startswith("docker-gate-") and v.name.endswith("-data") and v.name not in known_volumes:
             orphans.append({"name": v.name})
+    return orphans
+
+
+def find_orphan_networks():
+    """Docker networks named 'docker-gate-*-net' but absent from our state
+    file — same leftover scenario as orphan containers/volumes, for the
+    per-app network created in multi-container mode."""
+    known_networks = _known_network_names()
+    orphans = []
+    for n in docker_client.networks.list():
+        if n.name.startswith("docker-gate-") and n.name.endswith("-net") and n.name not in known_networks:
+            orphans.append({"name": n.name})
     return orphans
 
 
@@ -1111,8 +1396,7 @@ def find_dangling_images():
 
 def remove_orphan_container(name, lang):
     """Removes one specific orphan container (never in bulk)."""
-    known_names = {a["container_name"] for a in _load_state()}
-    if name in known_names or not name.startswith("docker-gate-"):
+    if name in _known_container_names() or not name.startswith("docker-gate-"):
         raise DockerConnectorError(t("err_container_not_orphan", lang))
     try:
         c = docker_client.containers.get(name)
@@ -1124,11 +1408,20 @@ def remove_orphan_container(name, lang):
 
 def remove_orphan_volume(name, lang):
     """Removes one specific orphan volume (never in bulk)."""
-    known_volumes = {a["volume_name"] for a in _load_state() if a.get("volume_name")}
-    if name in known_volumes or not (name.startswith("docker-gate-") and name.endswith("-data")):
+    if name in _known_volume_names() or not (name.startswith("docker-gate-") and name.endswith("-data")):
         raise DockerConnectorError(t("err_volume_not_orphan", lang))
     try:
         docker_client.volumes.get(name).remove()
+    except docker.errors.NotFound:
+        pass
+
+
+def remove_orphan_network(name, lang):
+    """Removes one specific orphan network (never in bulk)."""
+    if name in _known_network_names() or not (name.startswith("docker-gate-") and name.endswith("-net")):
+        raise DockerConnectorError(t("err_network_not_orphan", lang))
+    try:
+        docker_client.networks.get(name).remove()
     except docker.errors.NotFound:
         pass
 

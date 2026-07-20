@@ -17,6 +17,10 @@
     <div class="n">{{ orphan_volumes|length }}</div>
     <div class="l">{{ t('h2_orphan_volumes') }}</div>
   </div>
+  <div class="stat {{ 'warn' if orphan_networks else 'clean' }}">
+    <div class="n">{{ orphan_networks|length }}</div>
+    <div class="l">{{ t('h2_orphan_networks') }}</div>
+  </div>
   <div class="stat {{ 'warn' if dangling_images else 'clean' }}">
     <div class="n">{{ dangling_images|length }}</div>
     <div class="l">{{ t('h2_dangling_images') }}</div>
@@ -31,7 +35,7 @@
   <button type="button" class="btn btn-primary" id="clean-all-btn" {{ 'disabled' if bulk_count == 0 else '' }}
           onclick="armCleanAll(this)">{{ t('btn_cleanup_all', n=bulk_count, plural=bulk_plural) }}</button>
 </div>
-{% if orphan_volumes or empty_domains %}
+{% if orphan_volumes or orphan_networks or empty_domains %}
 <p class="lead" style="font-size:0.78rem; margin:-0.4rem 0 1.2rem; text-align:right;">{{ t('bulk_cleanup_scope_note') }}</p>
 {% endif %}
 
@@ -77,6 +81,26 @@
   </div>
 {% else %}
   <div class="clean-state">{{ t('no_orphan_volumes') }}</div>
+{% endif %}
+
+<div class="divider {{ '' if orphan_networks else 'clean' }}"><div class="line"></div><span>{{ t('h2_orphan_networks') }}</span><span class="count">{{ orphan_networks|length }}</span><div class="line red"></div></div>
+{% if orphan_networks %}
+  <div class="row-list">
+    {% for n in orphan_networks %}
+      <div class="row">
+        <span class="dot"></span>
+        <div class="info"><div class="name">{{ n.name }}</div></div>
+        <span class="tag">Network</span>
+        <form method="post" action="{{ url_for('audit_remove_network', name=n.name) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="del" type="submit"
+                  onclick='return armDelete(this, {{ t("confirm_delete_orphan_network", name=n.name)|tojson }})'>{{ t('btn_delete') }}</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="clean-state">{{ t('no_orphan_networks') }}</div>
 {% endif %}
 
 <div class="divider {{ '' if dangling_images else 'clean' }}"><div class="line"></div><span>{{ t('h2_dangling_images') }}</span><span class="count">{{ dangling_images|length }}</span><div class="line red"></div></div>
