@@ -720,6 +720,23 @@ def check_path_status(domain, path, lang):
     return {"status": "free", "domain": domain, "path": normalized_path}
 
 
+def _ensure_image_pulled(image, lang):
+    """Pulls the image if it isn't already present locally. Needed before
+    any containers.create() call: unlike containers.run() (used for the
+    ordinary single-container path), containers.create() does NOT pull a
+    missing image on its own — found the hard way testing the Immich
+    multi-container compose live on wappos-lab (2026-07-20): the very
+    first companion failed with a 404 'No such image' because create()
+    never even tried to fetch it."""
+    try:
+        docker_client.images.get(image)
+    except docker.errors.ImageNotFound:
+        try:
+            docker_client.images.pull(image)
+        except docker.errors.APIError as e:
+            raise DockerConnectorError(t("err_pull_image", lang, image=image, error=e))
+
+
 def _start_companion_containers(slug, network, companions, lang):
     """Creates and starts every companion container (database, cache...)
     of a multi-container app, connected to the given network under an
@@ -736,6 +753,7 @@ def _start_companion_containers(slug, network, companions, lang):
         for companion in companions:
             service_key = companion["service_key"]
             container_name = f"docker-gate-{slug}-{service_key}"
+            _ensure_image_pulled(companion["image"], lang)
             volume_name = None
             if companion.get("data_path"):
                 volume_name = f"docker-gate-{slug}-{service_key}-data"
@@ -1081,18 +1099,25 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             # dedicated network with an alias BEFORE starting — docker-py's
             # containers.run() doesn't expose network aliases, only a bare
             # network name (see _start_companion_containers, same reasoning).
+            # containers.create() doesn't auto-pull a missing image the way
+            # run() does, hence the explicit pull here (same bug found live
+            # on the Immich companions, see _ensure_image_pulled).
+            _ensure_image_pulled(image, lang)
             container = docker_client.containers.create(image, **run_kwargs)
             network.connect(container, aliases=[main_service_key] if main_service_key else None)
             container.start()
         else:
             docker_client.containers.run(image, **run_kwargs)
-    except docker.errors.APIError as e:
+    except (docker.errors.APIError, DockerConnectorError) as e:
         # Audit workstream 5 (2026-07-17): the volume may have just been
         # created above (data_path provided) — before this fix, a failure
         # HERE left that volume orphaned with no cleanup attempt at all,
         # even though the same volume is cleaned up further below if it's
         # the exposure step that fails instead. Inconsistency fixed: same
         # defensive gesture as on exposure, for a failure at this step.
+        # Also catches DockerConnectorError from _ensure_image_pulled above
+        # (missing image on a multi-container creation) — same rollback
+        # applies regardless of which of the two failed.
         if volume_name:
             try:
                 docker_client.volumes.get(volume_name).remove()
@@ -1102,6 +1127,8 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
             _teardown_companions(companion_entries)
         if network_name:
             _teardown_network(network_name)
+        if isinstance(e, DockerConnectorError):
+            raise
         raise DockerConnectorError(t("err_run_container", lang, error=e))
 
     # --- Exposure via the official "redirect" app ---
