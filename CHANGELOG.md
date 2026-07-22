@@ -7,6 +7,26 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.1.5~ynh1] — 2026-07-22
+
+### Changed
+- "Souveraineté numérique" retirée du pied de page (demande de Patrick, alignement avec wappos-portail).
+
+## [1.1.4~ynh1] — 2026-07-22
+
+### Changed
+- Le gros titre central "DOCKER GATE" (l'"eyebrow") est retiré pour aérer la page d'accueil. Le sous-titre "way to wappos" est déplacé sous le logo en haut à gauche (celui-ci passé en capitales), dans le même orange que l'ancien titre.
+
+## [1.1.3~ynh1] — 2026-07-22
+
+### Fixed
+- **La police de marque BYRTN (Montserrat) est enfin réellement chargée** — elle était référencée en CSS (`font-family: 'Montserrat'`) depuis la toute première version, sans qu'aucun mécanisme (ni `@font-face`, ni lien Google Fonts) ne la charge jamais : l'app retombait silencieusement sur la police système depuis le début. Auto-hébergée (fichier variable `.woff2` unique, extrait de Google Fonts) plutôt que chargée depuis `fonts.googleapis.com`, cohérent avec le discours de souveraineté numérique. Rendu légèrement resserré (`letter-spacing: -0.015em`), demande de Patrick — pas de coupe "condensed" officielle pour Montserrat chez Google Fonts.
+
+## [1.1.2~ynh1] — 2026-07-22
+
+### Removed
+- Le lien "Back to portal" (pointant en dur vers `/yunohost/sso/`) est retiré — devenu incohérent depuis que Docker Gate s'ouvre en nouvel onglet depuis wappos-portail (fermer l'onglet suffit).
+
 ## [1.1.1~ynh1] — 2026-07-20
 
 ### Changed
