@@ -606,7 +606,6 @@ STRINGS = {
     "btn_back_home": {"en": "← Back to home", "fr": "← Retour à l'accueil"},
 
     # --- base.html (header) ---
-    "nav_back_portal": {"en": "← Back to portal", "fr": "← Retour au portail"},
 }
 
 

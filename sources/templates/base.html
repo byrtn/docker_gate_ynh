@@ -5,6 +5,20 @@
 <title>{% block title %}Docker Gate{% endblock %}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
+  /* Police de marque BYRTN (Montserrat), la même que wappify.byrtn.fr et
+     byrtn.fr — auto-hébergée (fichier variable, un seul .woff2 couvre tous
+     les poids), jamais chargée depuis fonts.googleapis.com. Corrige au
+     passage un manque pré-existant : `font-family: 'Montserrat'` était déjà
+     référencé plus bas sans qu'aucun mécanisme ne charge réellement cette
+     police (retombait silencieusement sur la police système depuis le
+     début) — trouvé le 22/07/2026 en alignant Docker Gate sur wappos-portail. */
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('static/fonts/Montserrat-Variable.woff2') format('woff2');
+  }
   :root {
     /* "Docker Gate" theme (workstream 3, 2026-07-16) — copied identically
        from docs/02-wappos/docker_gate_ynh/design/docker-gate-mockup-accueil.html,
@@ -34,46 +48,29 @@
     font-family: 'Montserrat', -apple-system, 'Segoe UI', sans-serif;
     min-height: 100vh;
     padding: 3.5rem 1.5rem 5rem;
+    /* Rendu resserré (demande de Patrick sur wappos-portail, 22/07/2026,
+       appliqué ici pour la cohérence entre nos produits) : pas de police
+       condensée officielle pour Montserrat chez Google Fonts, on resserre
+       juste l'espacement des lettres. */
+    letter-spacing: -0.015em;
   }
   .wrap { max-width: 720px; margin: 0 auto; position: relative; }
 
   /* --- Header: logo + triangle (pattern taken from the Docker Gate logo,
      workstream 1) + language switcher --- */
   .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
-  .app-header .logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; color: var(--color-primary); }
+  .app-header .logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; color: var(--color-primary); text-transform: uppercase; }
+  /* Sous-titre déplacé ici depuis le gros titre central (retiré, demande de
+     Patrick, 22/07/2026, pour aérer la page) — même orange que l'ancien
+     titre. */
+  .logo-sub { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; color: var(--color-accent); margin-top: 0.1rem; }
   .tri { width: 0.65rem; height: 0.65rem; background: var(--color-accent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); display: inline-block; flex-shrink: 0; }
   .header-right { display: flex; align-items: center; gap: 1rem; }
-  .nav-back-portal { font-size: 0.8rem; color: var(--color-text-dim); text-decoration: none; }
-  .nav-back-portal:hover { color: var(--color-primary); text-decoration: underline; }
 
   .lang-switcher { font-size: 0.8rem; }
   .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
   .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
 
-  .eyebrow {
-    color: var(--color-accent);
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    font-size: 2rem;
-    text-transform: uppercase;
-    margin-bottom: 1.25rem;
-    text-align: center;
-  }
-  /* Tagline sub-line (2026-07-17) — never translated, same as "Docker
-     Gate" — casing deliberately kept as-is (no inherited uppercase).
-     Size left unchanged (explicit request from Patrick, evening of
-     2026-07-17) when "Docker Gate" above went back to being large —
-     em value recomputed as an absolute (0.85rem) so it doesn't follow
-     its .eyebrow parent's new font-size. */
-  .eyebrow-sub {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: none;
-    color: var(--color-text-dim);
-    margin-top: 0.35rem;
-  }
   h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1.25rem; text-align: center; color: var(--color-primary); }
   p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2.25rem; }
 
@@ -299,16 +296,17 @@
 <body>
 <div class="wrap">
   <header class="app-header">
-    <div class="logo"><span class="tri"></span> Docker Gate</div>
+    <div>
+      <div class="logo"><span class="tri"></span> Docker Gate</div>
+      <div class="logo-sub">way to wappos</div>
+    </div>
     <div class="header-right">
-      <a class="nav-back-portal" href="/yunohost/sso/">{{ t('nav_back_portal') }}</a>
       <div class="lang-switcher">
         <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
         <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
       </div>
     </div>
   </header>
-  <div class="eyebrow">Docker Gate<br><span class="eyebrow-sub">way to wappos</span></div>
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
       {% set css_category = category if category in ('success', 'warning') else 'error' %}
@@ -317,7 +315,7 @@
   {% endwith %}
   {% block content %}{% endblock %}
   <div class="footer-divider"><div class="line"></div><span class="tri"></span><div class="line red"></div></div>
-  <div class="footer">Docker Gate v{{ app_version }} &middot; &copy; <a href="https://byrtn.fr/home/"><b>BYRTN</b></a> — souveraineté numérique.</div>
+  <div class="footer">Docker Gate v{{ app_version }} &middot; &copy; <a href="https://byrtn.fr/home/"><b>BYRTN</b></a></div>
 </div>
 <script>
 const CONFIRM_LABEL = {{ t('btn_confirm')|tojson }};
