@@ -158,7 +158,13 @@ def add():
     lang = get_lang()
     if request.method == "GET":
         domains = ynh_manager.existing_domains(lang)
-        return render_template("add.html", domains=domains)
+        # Pre-select the domain Docker Gate is currently being browsed from
+        # (rather than letting the browser default to whichever domain
+        # sorts first alphabetically in `domains` — on a multi-domain
+        # instance this silently pointed new subdomains at the wrong
+        # domain twice in the same session, 2026-07-24).
+        current_domain = request.host.split(":")[0]
+        return render_template("add.html", domains=domains, current_domain=current_domain)
 
     slug = request.form.get("slug", "").strip().lower()
     image = request.form.get("image", "").strip()
