@@ -72,7 +72,7 @@
     <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
       <select id="domain" name="domain" style="width:auto; flex:0 0 auto;" onchange="schedulePathCheck()">
         {% for d in domains %}
-          <option value="{{ d }}">{{ d }}</option>
+          <option value="{{ d }}" {% if (form.domain if form else current_domain) == d %}selected{% endif %}>{{ d }}</option>
         {% endfor %}
       </select>
       <span>/</span>
@@ -93,7 +93,7 @@
       <span>.</span>
       <select id="domain_parent" name="domain_parent" onchange="scheduleSubdomainCheck()" style="width:auto; flex:0 0 auto;">
         {% for d in domains %}
-          <option value="{{ d }}">{{ d }}</option>
+          <option value="{{ d }}" {% if (form.domain_parent if form else current_domain) == d %}selected{% endif %}>{{ d }}</option>
         {% endfor %}
       </select>
     </div>
