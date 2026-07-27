@@ -7,7 +7,7 @@ name = "Docker Gate"
 description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
 description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
 
-version = "1.1.6~ynh1"
+version = "1.2.0~ynh1"
 
 maintainers = ["byrtn"]
 
@@ -41,10 +41,21 @@ ram.runtime = "150M"
     [install.init_main_permission]
     # also a generic question (confirmed: the displayed text was YunoHost's
     # standard text, not ours) — only the help text is customizable
+    #
+    # "visitors" since 2026-07-27 (was "admins"): the SSOwat "main" permission
+    # must stay PUBLIC, otherwise an unauthenticated visitor gets intercepted
+    # by SSOwat and redirected to the native portal (/yunohost/sso/login)
+    # BEFORE ever reaching our app — which is exactly the broken post-login
+    # redirect flow documented as unfixable upstream (no per-domain custom-JS
+    # hook exists in YunoHost, only custom_css — see yunohost/domain.py).
+    # Real admin-only access is now enforced INSIDE app.py itself, via
+    # portalapi/me's "groups" field — same pattern as wappos_portail_ynh
+    # (DEC-072). Non-admin/unauthenticated visitors see our own login page,
+    # never the docker management UI itself.
     type = "group"
-    default = "admins"
-    help.en = "Docker Gate is an administration tool — access should stay restricted to admins."
-    help.fr = "Docker Gate est un outil d'administration — l'accès doit rester restreint aux admins."
+    default = "visitors"
+    help.en = "Docker Gate shows its own login page to anyone; actual admin access is checked internally, not by this permission."
+    help.fr = "Docker Gate affiche sa propre page de connexion à tous ; l'accès admin réel est vérifié en interne, pas par cette permission."
 
     [install.default_language]
     # Default interface language (2026-07-15, i18n) — stays changeable at
@@ -68,6 +79,15 @@ ram.runtime = "150M"
     [resources.permissions]
     main.url = "/"
     main.show_tile = true
+    # Prevents an admin from accidentally removing "visitors" from this
+    # permission later (webadmin) — see the long comment in
+    # [install.init_main_permission] above: our own login page only works if
+    # "/" stays public at the SSOwat level.
+    main.protected = true
+    # Explicit (already the default) — app.py (request.authorization) relies
+    # on it to relay the real password to the portal's internal API. Same
+    # pattern as wappos_portail_ynh.
+    main.auth_header = true
 
     [resources.ports]
     main.default = 9200

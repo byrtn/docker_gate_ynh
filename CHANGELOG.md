@@ -7,6 +7,20 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.2.0~ynh1] — 2026-07-27
+
+### Changed
+- **Permission `main` passée de `admins` à `visitors`** (publique) — l'accès admin réel est désormais vérifié en interne (`portalapi/me`, groupe `admins`), plus par SSOwat en amont. Corrige la boucle de redirection post-connexion cassée sur les domaines relayés (`dev.wappos.fr`) : un visiteur non authentifié voit maintenant la page de connexion de l'app directement, sans jamais transiter par le portail natif YunoHost (bug upstream non patchable, aucun hook JS par domaine n'existe côté YunoHost — voir DECISIONS.md DEC-096). Même pattern que `wappos_portail_ynh` (DEC-072).
+- Version affichée en pied de page resynchronisée avec `manifest.toml` (dérive silencieuse trouvée en passant, `1.1.1` codé en dur alors que le manifest était déjà à `1.1.6~ynh1`).
+
+### Added
+- Page de connexion maison (`login.html`) et page d'accès refusé (`access_denied.html`), affichées respectivement à un visiteur non connecté et à un utilisateur connecté mais non-admin.
+
+## [1.1.6~ynh1] — 2026-07-24
+
+### Fixed
+- Le formulaire d'ajout d'app ne présélectionnait jamais de domaine parent dans le menu déroulant — le navigateur retombait sur le premier domaine par ordre alphabétique de la liste YunoHost, sans lien avec le domaine réellement consulté (ex. app créée sous `byrtn.fr` au lieu de `wappos.fr`). Le formulaire présélectionne désormais `request.host`, tout en respectant un choix explicite de l'utilisateur en cas de nouvelle soumission après erreur.
+
 ## [1.1.5~ynh1] — 2026-07-22
 
 ### Changed
