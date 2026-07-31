@@ -7,7 +7,7 @@ name = "Docker Gate"
 description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
 description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
 
-version = "1.3.0~ynh1"
+version = "1.4.0~ynh1"
 
 maintainers = ["byrtn"]
 
@@ -19,7 +19,15 @@ code = "https://github.com/byrtn/docker_gate_ynh"
 yunohost = ">= 12.0.0"
 helpers_version = "2.0"
 architectures = ["amd64", "arm64"]
-multi_instance = false
+# Multi-instance since 2026-07-31 (DEC-134): Patrick wants Docker Gate
+# installable several times on the same server, on different domains,
+# without one instance ever colliding with or interfering with another.
+# Every Docker resource an instance creates (container/volume/network
+# names) is now prefixed with this instance's own YunoHost app id (see
+# YNH_APP_ID/RESOURCE_PREFIX in ynh_manager.py and conf/systemd.service) —
+# the shared Docker daemon itself has no notion of "instance", so this
+# had to be built explicitly rather than assumed for free.
+multi_instance = true
 
 ldap = "not_relevant"
 sso = false

@@ -29,6 +29,19 @@ import tempfile
 import time
 from pathlib import Path
 
+# Multi-instance support (2026-07-31, DEC-134): several Docker Gate
+# instances can now be installed on the same server (different domains).
+# YNH_APP_ID (set in conf/systemd.service from YunoHost's own __APP__
+# substitution — "docker_gate", "docker_gate__2", ...) makes every Docker
+# resource this instance creates (container/volume/network names) unique
+# on the shared Docker daemon, which has no notion of "instance" itself.
+# Existing containers created before this change keep their old literal
+# name forever (stored as-is in data/apps.json, never recomputed from
+# slug alone) — only NEW creations use the prefixed scheme, so this is not
+# a breaking change for an already-installed single instance.
+YNH_APP_ID = os.environ.get("YNH_APP_ID", "docker_gate")
+RESOURCE_PREFIX = f"docker-gate-{YNH_APP_ID}-"
+
 import docker
 import requests
 import yaml
@@ -896,22 +909,25 @@ def _build_compose_document(slug, main_key, image, container_port, host_port, en
 
     Every app — single container or multi — gets its own network and its
     own container_name/volume name(s), forced to the exact
-    'docker-gate-{slug}[-{service_key}]' convention the audit functions
-    (find_orphan_*) already expect, regardless of what Compose's own
-    default project-based naming would have produced."""
+    '{RESOURCE_PREFIX}{slug}[-{service_key}]' convention the audit
+    functions (find_orphan_*) already expect, regardless of what Compose's
+    own default project-based naming would have produced. The prefix
+    embeds this Docker Gate instance's own id (see RESOURCE_PREFIX above)
+    so that two instances installed on the same server never collide on
+    the same shared Docker daemon."""
     services = {}
     volumes = {}
 
     main_service = {
         "image": image,
-        "container_name": f"docker-gate-{slug}",
+        "container_name": f"{RESOURCE_PREFIX}{slug}",
         "restart": "unless-stopped",
         "ports": [f"127.0.0.1:{host_port}:{container_port}/tcp"],
     }
     if env_vars:
         main_service["environment"] = env_vars
     if data_path:
-        volume_name = f"docker-gate-{slug}-data"
+        volume_name = f"{RESOURCE_PREFIX}{slug}-data"
         volumes[volume_name] = {"name": volume_name}
         main_service["volumes"] = [f"{volume_name}:{data_path}"]
     if companions:
@@ -922,18 +938,18 @@ def _build_compose_document(slug, main_key, image, container_port, host_port, en
         service_key = c["service_key"]
         companion_service = {
             "image": c["image"],
-            "container_name": f"docker-gate-{slug}-{service_key}",
+            "container_name": f"{RESOURCE_PREFIX}{slug}-{service_key}",
             "restart": "unless-stopped",
         }
         if c.get("env_vars"):
             companion_service["environment"] = c["env_vars"]
         if c.get("data_path"):
-            volume_name = f"docker-gate-{slug}-{service_key}-data"
+            volume_name = f"{RESOURCE_PREFIX}{slug}-{service_key}-data"
             volumes[volume_name] = {"name": volume_name}
             companion_service["volumes"] = [f"{volume_name}:{c['data_path']}"]
         services[service_key] = companion_service
 
-    doc = {"services": services, "networks": {"default": {"name": f"docker-gate-{slug}-net"}}}
+    doc = {"services": services, "networks": {"default": {"name": f"{RESOURCE_PREFIX}{slug}-net"}}}
     if volumes:
         doc["volumes"] = volumes
     return doc
@@ -1195,7 +1211,7 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
     # real `docker compose` CLI (see this function's docstring,
     # _build_compose_document and _run_docker_compose) ---
     main_key = main_service_key or "app"
-    project_name = f"docker-gate-{slug}"
+    project_name = f"{RESOURCE_PREFIX}{slug}"
     compose_path = _compose_dir(slug) / "docker-compose.yml"
 
     step("step_write_compose")
@@ -1227,15 +1243,15 @@ def create_docker_app(slug, image, container_port, mode, domain, domain_parent, 
         _teardown_compose_project(project_name, compose_path)
         raise
 
-    container_name = f"docker-gate-{slug}"
-    volume_name = f"docker-gate-{slug}-data" if data_path else None
-    network_name = f"docker-gate-{slug}-net"
+    container_name = f"{RESOURCE_PREFIX}{slug}"
+    volume_name = f"{RESOURCE_PREFIX}{slug}-data" if data_path else None
+    network_name = f"{RESOURCE_PREFIX}{slug}-net"
     companion_entries = [
         {
             "service_key": c["service_key"],
-            "container_name": f"docker-gate-{slug}-{c['service_key']}",
+            "container_name": f"{RESOURCE_PREFIX}{slug}-{c['service_key']}",
             "image": c["image"],
-            "volume_name": f"docker-gate-{slug}-{c['service_key']}-data" if c.get("data_path") else None,
+            "volume_name": f"{RESOURCE_PREFIX}{slug}-{c['service_key']}-data" if c.get("data_path") else None,
             "data_path": c.get("data_path"),
             "env_var_keys": sorted(c["env_vars"].keys()) if c.get("env_vars") else [],
         }
@@ -1507,36 +1523,46 @@ def _known_network_names():
 
 
 def find_orphan_containers():
-    """Docker containers named 'docker-gate-*' but absent from our state
-    file — leftovers from an interrupted creation/removal."""
+    """Docker containers named '{RESOURCE_PREFIX}*' but absent from our
+    state file — leftovers from an interrupted creation/removal.
+
+    Scoped to THIS instance's own RESOURCE_PREFIX (not a generic
+    'docker-gate-' match) since 2026-07-31 (DEC-134, multi-instance
+    support): on a server with several Docker Gate instances sharing the
+    same Docker daemon, a broader match would surface another instance's
+    perfectly healthy, actively-managed containers as "orphans" here —
+    and the removal functions below would happily delete them, since they
+    are indeed absent from THIS instance's own state file."""
     known_names = _known_container_names()
     orphans = []
     for c in docker_client.containers.list(all=True):
-        if c.name.startswith("docker-gate-") and c.name not in known_names:
+        if c.name.startswith(RESOURCE_PREFIX) and c.name not in known_names:
             orphans.append({"name": c.name, "status": c.status, "image": c.image.tags})
     return orphans
 
 
 def find_orphan_volumes():
-    """Docker volumes named 'docker-gate-*-data' but absent from our state
-    file — never bulk-deleted, one at a time and with explicit confirmation
-    (may contain real data)."""
+    """Docker volumes named '{RESOURCE_PREFIX}*-data' but absent from our
+    state file — never bulk-deleted, one at a time and with explicit
+    confirmation (may contain real data). Scoped to this instance's own
+    RESOURCE_PREFIX — see find_orphan_containers for why."""
     known_volumes = _known_volume_names()
     orphans = []
     for v in docker_client.volumes.list():
-        if v.name.startswith("docker-gate-") and v.name.endswith("-data") and v.name not in known_volumes:
+        if v.name.startswith(RESOURCE_PREFIX) and v.name.endswith("-data") and v.name not in known_volumes:
             orphans.append({"name": v.name})
     return orphans
 
 
 def find_orphan_networks():
-    """Docker networks named 'docker-gate-*-net' but absent from our state
-    file — same leftover scenario as orphan containers/volumes, for the
-    per-app network created in multi-container mode."""
+    """Docker networks named '{RESOURCE_PREFIX}*-net' but absent from our
+    state file — same leftover scenario as orphan containers/volumes, for
+    the per-app network created in multi-container mode. Scoped to this
+    instance's own RESOURCE_PREFIX — see find_orphan_containers for why."""
     known_networks = _known_network_names()
     orphans = []
     for n in docker_client.networks.list():
-        if n.name.startswith("docker-gate-") and n.name.endswith("-net") and n.name not in known_networks:
+        if n.name.startswith(RESOURCE_PREFIX) and n.name.endswith("-net") and n.name not in known_networks:
             orphans.append({"name": n.name})
     return orphans
 
@@ -1549,8 +1575,11 @@ def find_dangling_images():
 
 
 def remove_orphan_container(name, lang):
-    """Removes one specific orphan container (never in bulk)."""
-    if name in _known_container_names() or not name.startswith("docker-gate-"):
+    """Removes one specific orphan container (never in bulk). Scoped to
+    this instance's own RESOURCE_PREFIX (2026-07-31, DEC-134) — never lets
+    this instance remove a container belonging to another Docker Gate
+    instance installed on the same server."""
+    if name in _known_container_names() or not name.startswith(RESOURCE_PREFIX):
         raise DockerConnectorError(t("err_container_not_orphan", lang))
     try:
         c = docker_client.containers.get(name)
@@ -1561,8 +1590,9 @@ def remove_orphan_container(name, lang):
 
 
 def remove_orphan_volume(name, lang):
-    """Removes one specific orphan volume (never in bulk)."""
-    if name in _known_volume_names() or not (name.startswith("docker-gate-") and name.endswith("-data")):
+    """Removes one specific orphan volume (never in bulk). Scoped to this
+    instance's own RESOURCE_PREFIX — see remove_orphan_container."""
+    if name in _known_volume_names() or not (name.startswith(RESOURCE_PREFIX) and name.endswith("-data")):
         raise DockerConnectorError(t("err_volume_not_orphan", lang))
     try:
         docker_client.volumes.get(name).remove()
@@ -1571,8 +1601,9 @@ def remove_orphan_volume(name, lang):
 
 
 def remove_orphan_network(name, lang):
-    """Removes one specific orphan network (never in bulk)."""
-    if name in _known_network_names() or not (name.startswith("docker-gate-") and name.endswith("-net")):
+    """Removes one specific orphan network (never in bulk). Scoped to this
+    instance's own RESOURCE_PREFIX — see remove_orphan_container."""
+    if name in _known_network_names() or not (name.startswith(RESOURCE_PREFIX) and name.endswith("-net")):
         raise DockerConnectorError(t("err_network_not_orphan", lang))
     try:
         docker_client.networks.get(name).remove()

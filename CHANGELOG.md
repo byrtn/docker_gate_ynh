@@ -7,6 +7,17 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.4.0~ynh1] — 2026-07-31
+
+### Added
+- **Support multi-instance** (`multi_instance = true`) — Docker Gate peut désormais être installée plusieurs fois sur le même serveur, sur des domaines différents, chaque instance gérant ses propres apps Docker de façon indépendante.
+- `YNH_APP_ID` (variable d'environnement posée dans `conf/systemd.service` depuis la substitution `__APP__` de YunoHost) donne à chaque instance sa propre identité, utilisée pour préfixer tous les noms de ressources Docker qu'elle crée (`RESOURCE_PREFIX` dans `ynh_manager.py`) — conteneurs, volumes, réseaux. Le démon Docker est partagé par toutes les instances d'un même serveur et n'a lui-même aucune notion d'« instance » : sans ce préfixe, deux instances créant chacune une app du même nom entreraient en collision directe (même conteneur/volume/réseau).
+- Les fonctions de détection et de suppression des résidus (page Audit — `find_orphan_*`/`remove_orphan_*`) sont désormais strictement bornées au préfixe de l'instance courante — sans quoi l'audit d'une instance aurait pu lister (et supprimer !) les conteneurs parfaitement sains d'une autre instance, simplement absents de son propre fichier d'état.
+
+### Note opérationnelle importante
+- **La désinstallation complète de Docker CE (page Audit) reste une action globale au serveur**, non isolée par instance : elle arrête et purge Docker entièrement, ce qui détruit aussi bien les apps de l'instance courante que celles de toute autre instance de Docker Gate installée sur le même serveur (ou tout autre conteneur Docker non lié à Docker Gate). L'avertissement déjà affiché à l'écran avant cette action ("détruit les conteneurs suivis ET les conteneurs étrangers, sans distinction") reste donc exact mais devient plus lourd de conséquences dès qu'il y a plusieurs instances — à garder en tête avant de cliquer depuis n'importe laquelle.
+- Les apps Docker créées par une instance **avant** cette mise à jour gardent leur nom de conteneur/volume/réseau d'origine (stocké tel quel dans `data/apps.json`, jamais recalculé) — seules les nouvelles créations utilisent le nouveau schéma préfixé. Pour l'instance déjà installée aujourd'hui (id `docker_gate`), les futures créations porteront donc des noms du type `docker-gate-docker_gate-{slug}` (légèrement redondant mais sans impact fonctionnel) plutôt que l'ancien `docker-gate-{slug}`.
+
 ## [1.3.0~ynh1] — 2026-07-31
 
 ### Changed

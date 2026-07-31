@@ -8,6 +8,11 @@ User=__APP__
 Group=__APP__
 WorkingDirectory=__INSTALL_DIR__
 Environment="PATH=__INSTALL_DIR__/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Gives this instance its own identity (2026-07-31, DEC-134, multi-instance
+# support) — read by ynh_manager.py to prefix every Docker resource name it
+# creates (RESOURCE_PREFIX), so two instances on the same server never
+# collide on the shared Docker daemon.
+Environment="YNH_APP_ID=__APP__"
 ExecStart=__INSTALL_DIR__/venv/bin/gunicorn --workers 1 --bind 127.0.0.1:__PORT__ app:app
 Restart=on-failure
 RestartSec=5
