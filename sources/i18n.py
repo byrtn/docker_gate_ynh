@@ -606,23 +606,6 @@ STRINGS = {
     "btn_back_home": {"en": "← Back to home", "fr": "← Retour à l'accueil"},
 
     # --- base.html (header) ---
-
-    # --- login.html / access_denied.html (2026-07-27, DEC-096 D1) ---
-    "title_login": {"en": "Sign in", "fr": "Connexion"},
-    "username_label": {"en": "Username", "fr": "Nom d'utilisateur"},
-    "username_placeholder": {"en": "Username", "fr": "Nom d'utilisateur"},
-    "password_label": {"en": "Password", "fr": "Mot de passe"},
-    "password_placeholder": {"en": "Password", "fr": "Mot de passe"},
-    "toggle_password_show": {"en": "show", "fr": "afficher"},
-    "toggle_password_hide": {"en": "hide", "fr": "masquer"},
-    "btn_login": {"en": "Sign in", "fr": "Se connecter"},
-    "err_bad_credentials": {"en": "Incorrect username or password.", "fr": "Nom d'utilisateur ou mot de passe incorrect."},
-    "err_server_unreachable": {"en": "Could not reach the server.", "fr": "Impossible de joindre le serveur."},
-    "title_access_denied": {"en": "Access denied", "fr": "Accès refusé"},
-    "access_denied_lead": {
-        "en": "Docker Gate is an administration tool — your account isn't a member of the admins group.",
-        "fr": "Docker Gate est un outil d'administration — ton compte ne fait pas partie du groupe admins.",
-    },
 }
 
 

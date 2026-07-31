@@ -7,6 +7,17 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.3.0~ynh1] — 2026-07-31
+
+### Changed
+- **Permission `main` revenue de `visitors` à `admins`** — Docker Gate est un outil réservé aux administrateurs, il ne doit jamais être accessible aux visiteurs anonymes ni à tous les comptes YunoHost, même via sa propre page de connexion. Le changement du 27/07 (voir 1.2.0~ynh1 ci-dessous) violait cette exigence produit et la convention native YunoHost pour les apps admin-only. SSOwat bloque de nouveau tout accès non-admin avant même que la requête n'atteigne l'app. Voir DECISIONS.md DEC-133 pour le détail complet, y compris la régression acceptée du bug de redirection post-connexion sur les domaines relayés (DEC-096) — trade-off explicitement assumé.
+- `main.show_tile` remis à `false` dans le manifeste (le webadmin l'avait remis à `true` par défaut, désynchronisé de la réalité de production où il avait été repassé à `false` — voir DEC-097).
+- `main.auth_header` repassé à `false` (plus utilisé, la vérification interne qui s'en servait a été retirée).
+
+### Removed
+- Page de connexion maison (`login.html`) et page d'accès refusé (`access_denied.html`) — plus nécessaires, SSOwat filtre désormais tout en amont.
+- Le mécanisme de vérification interne (`portalapi/me`, relais du Basic-Auth) — devenu redondant.
+
 ## [1.2.0~ynh1] — 2026-07-27
 
 ### Changed

@@ -10,13 +10,11 @@ manifest.toml, default_language question + data/default_language.txt
 written by the install/upgrade/restore scripts).
 """
 import hmac
-import http.cookies
 import json
 import secrets
 import threading
 from pathlib import Path
 
-import requests
 from flask import Flask, abort, render_template, request, redirect, session, url_for, flash, jsonify, make_response
 
 import ynh_manager
@@ -127,108 +125,19 @@ app.jinja_env.globals["current_lang"] = get_lang
 app.jinja_env.globals["app_version"] = APP_VERSION
 
 
-# --- Internal auth gate (2026-07-27, DEC-096 D1) ---------------------------
+# --- Access control -------------------------------------------------------
 #
-# Until now, the "main" SSOwat permission was "admins" — nginx blocked any
-# non-admin *before* the request ever reached this app, so app.py never had
-# to check who was asking. That's exactly what broke deep links on
-# dev.wappos.fr: an unauthenticated visitor got redirected to the native
-# portal's login page (/yunohost/sso?r=...), and a bug in YunoHost's own
-# post-login redirect JS (unconditional fallback navigation to "/" right
-# after the conditional external redirect — see DECISIONS.md DEC-096 for
-# the full trace) sent them back to the general app list instead of here.
-# No official per-domain custom-JS hook exists to patch that (only
-# custom_css, confirmed by reading yunohost/domain.py) — so the fix has to
-# live on our side instead.
+# Docker Gate is an admin-only tool. Access control is enforced entirely by
+# YunoHost/SSOwat itself, at the "main" permission level (group "admins",
+# manifest.toml) — nginx blocks any non-admin *before* the request ever
+# reaches this app, so app.py never needs to check who's asking.
 #
-# The permission is now "visitors" (manifest.toml) — SSOwat lets everyone
-# through, and it never triggers that broken flow. Real access control
-# moves in here, using the same pattern as wappos_portail_ynh (DEC-072):
-# SSOwat still injects a Basic-Auth "Authorization" header for anyone who
-# already has a valid portal session (auth_header=true), which we relay to
-# the portal's own internal API (portalapi) to verify both identity and
-# admins-group membership — never checking a password ourselves.
-PORTALAPI_BASE = "http://127.0.0.1:6788"
-
-# Routes that must stay reachable with no session at all.
-_AUTH_EXEMPT_ENDPOINTS = {"healthz", "set_language"}
-
-
-def _current_user():
-    if request.authorization:
-        return request.authorization.username
-    return None
-
-
-def _portal_host_header():
-    # portalapi authorizes access to a domain based on the Host header of
-    # THIS request (user_is_allowed_on_domain in ldap_ynhuser.py), not an
-    # explicit parameter — calling 127.0.0.1 directly would otherwise send
-    # Host: 127.0.0.1, matching no known YunoHost domain (generic 401 even
-    # with a correct password). Forcing the real Host we received fixes it.
-    return {"Host": request.host}
-
-
-def _extract_portal_cookie(resp):
-    # portalapi sets the session cookie with domain=".<real host>" — calling
-    # 127.0.0.1 directly, requests' cookiejar (RFC 6265) refuses to attach
-    # that cookie back to a 127.0.0.1 request. Extracted from the raw
-    # Set-Cookie header instead and passed explicitly on every call.
-    raw_cookies = resp.raw.headers.getlist("Set-Cookie") if resp.raw else []
-    for raw_cookie in raw_cookies:
-        jar = http.cookies.SimpleCookie()
-        jar.load(raw_cookie)
-        if "yunohost.portal" in jar:
-            return jar["yunohost.portal"].value
-    return None
-
-
-def _portalapi_login(user, password):
-    # Relays the credentials SSOwat already validated once for THIS request
-    # (Authorization header) — we never store or log them, and never verify
-    # a password ourselves.
-    resp = requests.post(
-        f"{PORTALAPI_BASE}/login",
-        json={"credentials": f"{user}:{password}"},
-        headers=_portal_host_header(),
-        timeout=10,
-    )
-    resp.raise_for_status()
-    token = _extract_portal_cookie(resp)
-    if not token:
-        raise requests.exceptions.RequestException("No session cookie returned by portalapi login")
-    return token
-
-
-def _portalapi_me(token):
-    resp = requests.get(
-        f"{PORTALAPI_BASE}/me",
-        headers=_portal_host_header(),
-        cookies={"yunohost.portal": token},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-@app.before_request
-def _check_auth():
-    if request.endpoint in _AUTH_EXEMPT_ENDPOINTS:
-        return
-
-    user = _current_user()
-    if not user:
-        return render_template("login.html"), 200
-
-    try:
-        token = _portalapi_login(user, request.authorization.password)
-        me = _portalapi_me(token)
-    except requests.exceptions.RequestException as e:
-        app.logger.error("Failed to verify identity for %r: %s", user, e)
-        return render_template("login.html"), 200
-
-    if "admins" not in me.get("groups", []):
-        return render_template("access_denied.html"), 403
+# (2026-07-27 to 2026-07-31, DEC-096 D1 / DEC-133: this app briefly made the
+# permission public and did the admin check in here instead, via the
+# portal's internal API — a workaround for a broken YunoHost post-login
+# deep-link redirect. That violated the actual product requirement for an
+# admin-only tool and YunoHost's own convention for it, and was reverted —
+# see DECISIONS.md DEC-133 for the full trace.)
 
 
 @app.before_request

@@ -7,7 +7,7 @@ name = "Docker Gate"
 description.en = "Install Docker and expose containers behind YunoHost's SSO with one click"
 description.fr = "Installe Docker et expose des conteneurs derrière le SSO de YunoHost en un clic"
 
-version = "1.2.0~ynh1"
+version = "1.3.0~ynh1"
 
 maintainers = ["byrtn"]
 
@@ -42,20 +42,23 @@ ram.runtime = "150M"
     # also a generic question (confirmed: the displayed text was YunoHost's
     # standard text, not ours) — only the help text is customizable
     #
-    # "visitors" since 2026-07-27 (was "admins"): the SSOwat "main" permission
-    # must stay PUBLIC, otherwise an unauthenticated visitor gets intercepted
-    # by SSOwat and redirected to the native portal (/yunohost/sso/login)
-    # BEFORE ever reaching our app — which is exactly the broken post-login
-    # redirect flow documented as unfixable upstream (no per-domain custom-JS
-    # hook exists in YunoHost, only custom_css — see yunohost/domain.py).
-    # Real admin-only access is now enforced INSIDE app.py itself, via
-    # portalapi/me's "groups" field — same pattern as wappos_portail_ynh
-    # (DEC-072). Non-admin/unauthenticated visitors see our own login page,
-    # never the docker management UI itself.
+    # "admins" since 2026-07-31 (was "visitors" since 2026-07-27, itself
+    # reverted from "admins"): Docker Gate is an admin-only tool by design —
+    # it must never be reachable by an unauthenticated visitor or a non-admin
+    # account, not even indirectly via its own login page. The 2026-07-27
+    # experiment (public "main" permission + access control done INSIDE
+    # app.py via portalapi/me) was meant to work around a broken YunoHost
+    # post-login deep-link redirect (see DECISIONS.md DEC-096), but it
+    # violated the actual product requirement and YunoHost's own convention
+    # for admin-only apps (native permission group, not an app-level gate).
+    # Reverted: SSOwat now blocks any non-admin before the request ever
+    # reaches this app, exactly like before DEC-096 — see DECISIONS.md
+    # DEC-133 for the full trace, including how a possible regression of the
+    # deep-link redirect bug was a deliberate, accepted trade-off.
     type = "group"
-    default = "visitors"
-    help.en = "Docker Gate shows its own login page to anyone; actual admin access is checked internally, not by this permission."
-    help.fr = "Docker Gate affiche sa propre page de connexion à tous ; l'accès admin réel est vérifié en interne, pas par cette permission."
+    default = "admins"
+    help.en = "Docker Gate is an administration tool: only members of the admins group can access it."
+    help.fr = "Docker Gate est un outil d'administration : seuls les membres du groupe admins peuvent y accéder."
 
     [install.default_language]
     # Default interface language (2026-07-15, i18n) — stays changeable at
@@ -78,16 +81,19 @@ ram.runtime = "150M"
 
     [resources.permissions]
     main.url = "/"
-    main.show_tile = true
-    # Prevents an admin from accidentally removing "visitors" from this
-    # permission later (webadmin) — see the long comment in
-    # [install.init_main_permission] above: our own login page only works if
-    # "/" stays public at the SSOwat level.
+    # Never shown as a portal tile — Docker Gate is an admin-only tool,
+    # reached directly by URL, not meant to appear next to regular apps.
+    main.show_tile = false
+    # Prevents this permission from ever being accidentally opened to
+    # "visitors"/"all_users" later (webadmin or CLI) — a deliberate safety
+    # net now that admin-only access is enforced by SSOwat itself (see
+    # [install.init_main_permission] above and DECISIONS.md DEC-133).
     main.protected = true
-    # Explicit (already the default) — app.py (request.authorization) relies
-    # on it to relay the real password to the portal's internal API. Same
-    # pattern as wappos_portail_ynh.
-    main.auth_header = true
+    # No longer needed: app.py doesn't relay any Basic-Auth header to a
+    # portal API anymore (removed with the DEC-096 D1 internal auth gate,
+    # see DECISIONS.md DEC-133) — SSOwat's own admins-only gate is now the
+    # single source of truth for access control.
+    main.auth_header = false
 
     [resources.ports]
     main.default = 9200
