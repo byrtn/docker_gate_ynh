@@ -606,6 +606,7 @@ STRINGS = {
     "btn_back_home": {"en": "← Back to home", "fr": "← Retour à l'accueil"},
 
     # --- base.html (header) ---
+    "logout": {"en": "Log out", "fr": "Déconnexion"},
 }
 
 

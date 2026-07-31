@@ -71,6 +71,19 @@
   .lang-switcher a { color: var(--color-text-dim); text-decoration: none; padding: 0.2rem 0.4rem; }
   .lang-switcher a.active { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
 
+  /* Bouton Déconnexion (2026-07-31, DEC-135) — même mécanisme que
+     wappos_portal_ynh (/yunohost/portalapi/logout, appelé via fetch,
+     jamais de logique de session réimplémentée nous-mêmes), adapté au
+     thème visuel de Docker Gate plutôt que copié tel quel. */
+  .logout-button {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--color-text-dim); font-family: inherit; font-size: 0.8rem; font-weight: 600;
+    padding: 0.2rem 0.4rem;
+  }
+  .logout-button:hover { color: var(--color-accent); }
+  .logout-button svg { width: 1em; height: 1em; }
+
   h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; margin-bottom: 1.25rem; text-align: center; color: var(--color-primary); }
   p.lead { color: var(--color-text-dim); font-size: 1rem; text-align: center; margin-bottom: 2.25rem; }
 
@@ -305,6 +318,13 @@
         <a href="{{ url_for('set_language', lang='en') }}" class="{{ 'active' if current_lang() == 'en' else '' }}">EN</a> |
         <a href="{{ url_for('set_language', lang='fr') }}" class="{{ 'active' if current_lang() == 'fr' else '' }}">FR</a>
       </div>
+      <!-- Toujours affiché, sans condition sur un "user" : depuis DEC-133
+           l'accès est filtré en amont par SSOwat (permission admins-only),
+           donc quiconque atteint cette page est déjà authentifié. -->
+      <button type="button" class="logout-button" id="logout-link">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="m17 8l-1.4 1.4l1.6 1.6H9v2h8.2l-1.6 1.6L17 16l4-4l-4-4M5 5h7V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h7v-2H5V5Z"/></svg>
+        <span>{{ t('logout') }}</span>
+      </button>
     </div>
   </header>
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -341,6 +361,19 @@ function armDelete(btn, message) {
     btn.removeAttribute('title');
   }, 4000);
   return false;
+}
+
+// Déconnexion (2026-07-31, DEC-135) — même endpoint que wappos_portal_ynh
+// et le portail natif YunoHost lui-même (/yunohost/portalapi/logout,
+// méthode GET), appelé via fetch pour ne jamais réimplémenter la logique
+// de session nous-mêmes : on délègue entièrement à SSOwat.
+const logoutLink = document.getElementById('logout-link');
+if (logoutLink) {
+  logoutLink.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/yunohost/portalapi/logout', { method: 'GET' });
+    window.location.href = '.';
+  });
 }
 </script>
 </body>

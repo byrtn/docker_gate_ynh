@@ -7,6 +7,11 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.5.0~ynh1] — 2026-07-31
+
+### Added
+- Bouton "Déconnexion" dans l'en-tête (icône + texte), trouvé manquant par Patrick en testant le multi-instance (fermer l'onglet laissait la session du domaine ouverte, sans aucun moyen de la clore proprement depuis l'app elle-même). Même endpoint que `wappos_portal_ynh` et le portail natif YunoHost (`/yunohost/portalapi/logout`, GET, appelé via `fetch`) — délègue entièrement la gestion de session à SSOwat, aucune logique de déconnexion réimplémentée nous-mêmes.
+
 ## [1.4.0~ynh1] — 2026-07-31
 
 ### Added
