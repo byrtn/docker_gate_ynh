@@ -7,6 +7,11 @@ and this project adheres to YunoHost's `version~ynhN` scheme (the part before
 `~ynh` is the app's own version; `ynhN` increments for packaging-only changes
 that don't touch the app's behavior).
 
+## [1.5.1~ynh1] — 2026-08-01
+
+### Fixed
+- **Bug de multi-instance trouvé en préparant un protocole de test réel (jamais détecté par simple lecture de code)** : `install`/`upgrade`/`restore`/`remove` écrivaient tous en dur vers `/etc/sudoers.d/docker_gate` — un nom de fichier fixe, littéral, pas dérivé de `$app`. Le contenu du fichier était bien templaté par instance (`sed -i "s/__APP__/$app/g"`), mais la destination ne l'était pas. Conséquence concrète sur un serveur avec deux instances : la dernière installée/mise à jour écrase le fichier sudoers de l'autre, qui perd alors tout droit root — plus aucune action ne fonctionne pour elle (listage des domaines, création d'app...), échec silencieux en erreur 500 jamais expliqué avant ce diagnostic. Corrigé en utilisant `/etc/sudoers.d/$app` partout (chaque instance obtient enfin son propre fichier, cohérent avec son propre contenu).
+
 ## [1.5.0~ynh1] — 2026-07-31
 
 ### Added

@@ -31,11 +31,11 @@ chown -R "$app:$app" "$install_dir"
 chmod 750 "$install_dir"
 
 ynh_script_progression --message="Restoring the targeted sudo rights..." --weight=5
-cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/docker_gate
-sed -i "s/__APP__/$app/g" /etc/sudoers.d/docker_gate
-chmod 440 /etc/sudoers.d/docker_gate
-chown root:root /etc/sudoers.d/docker_gate
-visudo -c -f /etc/sudoers.d/docker_gate || ynh_die --message="The generated sudoers file is invalid, restore aborted for safety."
+cp "$install_dir/.package/docker_gate.sudoers" /etc/sudoers.d/$app
+sed -i "s/__APP__/$app/g" /etc/sudoers.d/$app
+chmod 440 /etc/sudoers.d/$app
+chown root:root /etc/sudoers.d/$app
+visudo -c -f /etc/sudoers.d/$app || ynh_die --message="The generated sudoers file is invalid, restore aborted for safety."
 
 ynh_script_progression --message="Restoring the logo..." --weight=2
 mkdir -p /usr/share/yunohost/applogos

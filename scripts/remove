@@ -253,7 +253,7 @@ ynh_script_progression --message="Removing the nginx configuration..." --weight=
 ynh_remove_nginx_config
 
 ynh_script_progression --message="Removing the sudo rights..." --weight=5
-rm -f /etc/sudoers.d/docker_gate
+rm -f /etc/sudoers.d/$app
 
 ynh_script_progression --message="Removing the systemd configuration..." --weight=5
 ynh_remove_systemd_config
